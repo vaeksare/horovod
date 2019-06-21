@@ -40,6 +40,7 @@ from horovod.torch.mpi_ops import mpi_threads_supported
 
 import torch
 import collections
+import queue
 
 
 class _DistributedOptimizer(torch.optim.Optimizer):
@@ -82,7 +83,9 @@ class _DistributedOptimizer(torch.optim.Optimizer):
                                  for _, v in sorted(named_parameters)}
         self._handles = {}
         self._grad_accs = []
-        self._requires_update = set()
+        self._requires_update = []
+        self._order_queue = queue.Queue()
+        self._ready_grads = set()
         self._synchronized = False
         self._should_synchronize = True
         if size() > 1:
@@ -108,7 +111,8 @@ class _DistributedOptimizer(torch.optim.Optimizer):
             for p in param_group['params']:
                 if p.requires_grad:
                     p.grad = p.data.new(p.size()).zero_()
-                    self._requires_update.add(p)
+                    self._requires_update.append(p)
+                    self._order_queue.put(p)
                     p_tmp = p.expand_as(p)
                     grad_acc = p_tmp.grad_fn.next_functions[0][0]
                     grad_acc.register_hook(self._make_hook(p))
@@ -124,39 +128,55 @@ class _DistributedOptimizer(torch.optim.Optimizer):
 
     def _make_hook(self, p):
         def hook(*ignore):
-            if p in self._handles and self._handles[p][0] is not None:
-                if self._allreduce_delay[p] <= 0:
+            par = p
+            if self._order_queue.empty():
+                raise AssertionError("An unknown gradient had a callback called on it.")
+
+            if par in self._handles and self._handles[par][0] is not None:
+                if self._allreduce_delay[par] <= 0:
                     raise AssertionError(
                         "Gradients were computed more than "
                         "backward_passes_per_step times before call "
                         "to step(). Increase backward_passes_per_step to "
                         "accumulate gradients locally.")
-            assert not p.grad.requires_grad
-            assert self._allreduce_delay[p] > 0
+            assert not par.grad.requires_grad
+            assert self._allreduce_delay[par] > 0
             handle, ctx = None, None
-            self._allreduce_delay[p] -= 1
-            if self._allreduce_delay[p] == 0:
-                handle, ctx = self._allreduce_grad_async(p)
-            self._handles[p] = (handle, ctx)
+            self._allreduce_delay[par] -= 1
+            self._handles[par] = (handle, ctx)
+            if self._allreduce_delay[par] == 0:
+                # Check if par is the next tensor we have to process
+                matches_next = torch.equal(par, self._order_queue.queue[0])
+                # Add it to list of ready tensors if not
+                if not matches_next:
+                    self._ready_grads.add(par)
+                # While next tensor is ready, allredude it
+                while matches_next:
+                    self._order_queue.get()
+                    handle, ctx = self._allreduce_grad_async(par)
+                    self._handles[par] = (handle, ctx)
+                    matches_next = False
+                    if not self._order_queue.empty():
+                        par = self._order_queue.queue[0]
+                        if par in self._ready_grads:
+                            self._ready_grads.remove(par)
+                            matches_next = True
         return hook
 
     def synchronize(self):
-        missing_p = self._requires_update - set(self._handles.keys())
-        for p in missing_p:
+        while not self._order_queue.empty():
+            p = self._order_queue.get()
             handle, ctx = self._allreduce_grad_async(p)
             self._handles[p] = (handle, ctx)
 
-        for p, value in self._handles.items():
-            handle, ctx = value
-            if handle is None:
-                handle, ctx = self._allreduce_grad_async(p)
-                self._handles[p] = (handle, ctx)
-        for p, (handle, _) in self._handles.items():
+        for p, (handle, ctx) in self._handles.items():
             output = synchronize(handle)
             self._allreduce_delay[p] = self.backward_passes_per_step
             p.grad.set_(self._compression.decompress(output, ctx))
         self._handles.clear()
-
+        self._ready_grads.clear()
+        for p in self._requires_update:
+            self._order_queue.put(p)
         self._synchronized = True
 
     @contextmanager
