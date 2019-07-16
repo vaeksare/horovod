@@ -22,72 +22,10 @@ namespace common {
 PointToPointOp::PointToPointOp(MPIContext* mpi_context, HorovodGlobalState* global_state)
     : AllreduceOp(global_state), mpi_context_(mpi_context) {}
 
-template<class T>
-void PointToPointOp::PointToPointSend(T* input_data_buffer,
-                                     int64_t num_elements,
-                                     int dest_rank,
-                                     int tag,
-                                     Communicator communicator) {
-  int status;                            
-  if (!global_state_->msg_chunk_enabled) {
-      status = MPI_Send(input_data_buffer,
-                        (int)num_elements * sizeof(T),
-                        MPI_CHAR,
-                        dest_rank,
-                        tag,
-                        mpi_context_->GetMPICommunicator(communicator));
-  }
-  else {
-        const int chunk_size = P2P_MESSAGE_CHUNK_SIZE / sizeof(T);
-        for (int buf_index = 0; buf_index < num_elements; buf_index += chunk_size) {
-          status = MPI_Send((uint8_t *)input_data_buffer + buf_index,
-                            std::min((int)num_elements - buf_index, chunk_size) * sizeof(T),
-                            MPI_CHAR,
-                            dest_rank,
-                            tag,
-                            mpi_context_->GetMPICommunicator(communicator));
-          status &= status;
-        }
-  }
-
-  if (status != MPI_SUCCESS) {
-    throw std::logic_error("MPI_Send failed, see MPI output for details.");
-  }
-}
-
-template<class T>
-void PointToPointOp::PointToPointRecv(T* output_data_buffer,
-                                     int64_t num_elements,
-                                     int src_rank,
-                                     int tag,
-                                     Communicator communicator) {
-  int status;                            
-  if (!global_state_->msg_chunk_enabled) {
-      status = MPI_Recv(output_data_buffer,
-                        (int)num_elements * sizeof(T),
-                        MPI_CHAR,
-                        src_rank,
-                        tag,
-                        mpi_context_->GetMPICommunicator(communicator),
-                        MPI_STATUS_IGNORE);
-  }
-  else {
-        const int chunk_size = P2P_MESSAGE_CHUNK_SIZE / sizeof(T);
-        for (int buf_index = 0; buf_index < num_elements; buf_index += chunk_size) {
-          status = MPI_Recv((uint8_t *)output_data_buffer + buf_index,
-                            std::min((int)num_elements - buf_index, chunk_size) * sizeof(T),
-                            MPI_CHAR,
-                            src_rank,
-                            tag,
-                            mpi_context_->GetMPICommunicator(communicator),
-                            MPI_STATUS_IGNORE);
-          status &= status;
-        }
-  }
-
-  if (status != MPI_SUCCESS) {
-    throw std::logic_error("MPI_Recv failed, see MPI output for details.");
-  }
+bool PointToPointOp::Enabled(const ParameterManager& param_manager,
+                           const std::vector<TensorTableEntry>& entries,
+                           const Response& response) const {
+  return true;
 }
 
 } // namespace common
