@@ -39,6 +39,8 @@
 #include "mpi_context.h"
 #include "operations.h"
 #include "ops/mpi_operations.h"
+#include "ops/p2p_operations.h"
+#include "ops/msallreduce_operations.h"
 #include "ops/operation_manager.h"
 #include "parameter_manager.h"
 #include "timeline.h"
@@ -147,7 +149,11 @@ OperationManager* CreateOperationManager(HorovodGlobalState& state) {
   std::vector<std::shared_ptr<AllreduceOp>> allreduce_ops;
   std::vector<std::shared_ptr<AllgatherOp>> allgather_ops;
   std::vector<std::shared_ptr<BroadcastOp>> broadcast_ops;
-
+  auto msallreduce = std::getenv(HOROVOD_MSALLREDUCE_ENABLE);
+  if (msallreduce != nullptr){
+    LOG(INFO) << "ms allreduce enabled.";
+    allreduce_ops.push_back(std::shared_ptr<AllreduceOp>(new MsAllreduceOp(&mpi_context, &state)));
+  }
 #if HAVE_CUDA
 #if HOROVOD_GPU_ALLREDUCE == 'M'
   allreduce_ops.push_back(std::shared_ptr<AllreduceOp>(

@@ -605,6 +605,8 @@ def get_common_options(build_ext):
                'horovod/common/timeline.cc',
                'horovod/common/ops/collective_operations.cc',
                'horovod/common/ops/mpi_operations.cc',
+               'horovod/common/ops/p2p_operations.cc',
+               'horovod/common/ops/msallreduce_operations.cc',
                'horovod/common/ops/operation_manager.cc',
                'horovod/common/optim/bayesian_optimization.cc',
                'horovod/common/optim/gaussian_process.cc',

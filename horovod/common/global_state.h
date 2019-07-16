@@ -96,7 +96,8 @@ struct HorovodGlobalState {
   std::atomic_bool initialization_done {false};
 
   // The MPI rank, local rank, size, local size, flag indicating whether MPI
-  // multi-threading is supported, ranks from which the MPI communicator will
+  // multi-threading is supported, flag indicating whether mpi point-to-point
+  // message chunking is enabled, ranks from which the MPI communicator will
   // be made and the communicator itself.
   int rank = 0;
   int local_rank = 0;
@@ -106,6 +107,7 @@ struct HorovodGlobalState {
   int cross_size = 1;
   bool mpi_threads_supported = false;
   bool is_homogeneous = false;
+  bool msg_chunk_enabled = false;
   std::vector<int> ranks;
 
   // COMM_WORLD ranks of processes running on this node.
