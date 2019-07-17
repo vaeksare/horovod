@@ -19,6 +19,7 @@
 
 #include <queue>
 #include <thread>
+#include <boost/asio/thread_pool.hpp>
 
 #include "fusion_buffer_manager.h"
 #include "parameter_manager.h"
@@ -51,6 +52,15 @@ struct HorovodGlobalState {
 
   // Tensors waiting to be allreduced or allgathered.
   TensorTable tensor_table;
+
+  // Thread pool to be used for parallel reductions
+  boost::asio::thread_pool background_thread_pool;
+
+  // Int used to keep track of how many of the parallel reductions finished
+  std::atomic_int finished_parallel_reductions;
+
+  // Global flag to determine the usage of a thread pool
+  int num_threads;
 
   // Background thread running MPI communication.
   std::thread background_thread;

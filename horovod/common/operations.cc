@@ -26,6 +26,8 @@
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
+#include <boost/asio/thread_pool.hpp>
+#include <boost/asio/post.hpp>
 
 #define OMPI_SKIP_MPICXX
 
@@ -507,6 +509,33 @@ ResponseList FuseResponses(std::deque<Response>& responses,
   {
     // Protect access to tensor table.
     std::lock_guard<std::mutex> guard(horovod_global.mutex);
+    // In Parallel mode, bundle multiple tensors together into one response, but do not
+    // actually fuse the tensor data into a single memory region.
+    if (state.num_threads > 1) {
+      while (!responses.empty()) {
+        auto response = responses.front();
+        assert(response.tensor_names().size() == 1);
+        responses.pop_front();
+        // TODO: this might need to be changed to ParallelAllreduce if that is its own Op.
+        if (response.response_type() == Response::ResponseType::ALLREDUCE) {
+          while (!responses.empty()) {
+            auto new_response = responses.front();
+            assert(new_responses.tensor_names().size() == 1);
+            // Append these together as they can be done in parallel.
+            if (response.response_type() == new_response.response_type()) {
+              response.add_tensor_name(new_response.tensor_names()[0]);
+              responses.pop_front();
+            } else {
+              break;
+            }
+          }
+        }
+        response_list.add_response(response);
+      }
+    }
+
+    // Note that if Parallel mode is enabled, the responses will be empty at this point
+    // so this loop will do nothing.
     while (!responses.empty()) {
 
       auto response = responses.front();
@@ -678,7 +707,7 @@ void PerformOperation(TensorTable& tensor_table, Response response) {
     timeline.Start(e.tensor_name, response.response_type());
   }
 
-  if (entries.size() > 1) {
+  if (entries.size() > 1 && horovod_global.num_threads == 1) {
     auto first_entry = entries[0];
     // Note: it is OK for different entries to come from different frameworks
     // since buffer allocated here is guaranteed to survive at least till the
@@ -958,6 +987,17 @@ void BackgroundThreadLoop(HorovodGlobalState& state, MPIContext& ctx) {
     MPI_Init_thread(NULL, NULL, required, &provided);
 #endif
     state.should_finalize = true;
+  }
+
+  // If running in parallel reduction mode, spin up the background thread pool
+
+  if (horovod_global.num_threads > 1) {\
+    //boost::asio::thread_pool pool(horovod_global.num_threads);
+    //horovod_global.background_thread_pool = pool;
+    //horovod_global.background_thread_pool = &boost::asio::thread_pool(horovod_global.num_threads);
+    //auto& pool = horovod_global.background_thread_pool;
+    //boost::asio::thread_pool pool(horovod_global.num_threads);
+    boost::asio::thread_pool horovod_global.background_thread_pool(horovod_global.num_threads);
   }
 
   if (state.ranks.size() > 0) {
@@ -1712,12 +1752,13 @@ bool RunLoopOnce(HorovodGlobalState& state, MPIContext& ctx,
 
 // Start Horovod background thread. Ensure that this is
 // only done once no matter how many times this function is called.
-void InitializeHorovodOnce(const int* ranks, int nranks) {
+void InitializeHorovodOnce(const int* ranks, int nranks, int num_threads) {
   // Ensure background thread is only started once.
   if (!horovod_global.initialize_flag.test_and_set()) {
     for (int i = 0; i < nranks; ++i) {
       horovod_global.ranks.push_back(ranks[i]);
     }
+    horovod_global.num_threads = num_threads;
 
     // Reset initialization flag
     horovod_global.initialization_done = false;
@@ -1736,6 +1777,37 @@ void InitializeHorovodOnce(const int* ranks, int nranks) {
 
 } // namespace
 
+
+// This is a placeholder. Will likely also need a second temp buffer input to use during the
+// reduction
+void PairwiseReduction(std::shared_ptr<Tensor> input) {
+
+}
+
+// This is the function that will be used by the Parallel Reduction Op. Currently 
+// putting it here as a temporary placeholder.
+Status execute(std::vector<TensorTableEntry>& entries, const Response& respose) {
+  auto& timeline = horovod_global.timeline;
+  horovod_global.finished_parallel_reductions = 0;
+  int num_reductions = entries.size();
+  timeline.ActivityStartAll(entries, MPI_ALLREDUCE);
+  for (auto& e : entries) {
+    boost::asio::post(horovod_global.background_thread_pool,
+    [=]
+    {
+      PairwiseReduction(e.tensor);
+      horovod_global.finished_parallel_reductions++;
+    });
+  }
+  // Block until all of the reductions are finished
+  while (horovod_global.finished_parallel_reductions < num_reductions) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  timeline.ActivityEndAll(entries);
+
+  return Status::OK();
+}
+
 Status CheckInitialized() {
   if (!horovod_global.initialization_done) {
     return NOT_INITIALIZED_ERROR;
@@ -1745,13 +1817,13 @@ Status CheckInitialized() {
 
 extern "C" {
 
-void horovod_init(const int* ranks, int nranks) {
-  InitializeHorovodOnce(ranks, nranks);
+void horovod_init(const int* ranks, int nranks, int num_threads) {
+  InitializeHorovodOnce(ranks, nranks, num_threads);
 }
 
-void horovod_init_comm(MPI_Comm comm) {
+void horovod_init_comm(MPI_Comm comm, int num_threads) {
   MPI_Comm_dup(comm, &(mpi_context.mpi_comm));
-  InitializeHorovodOnce(NULL, 0);
+  InitializeHorovodOnce(NULL, 0, num_threads);
 }
 
 void horovod_shutdown() {
