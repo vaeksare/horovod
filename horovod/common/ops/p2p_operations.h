@@ -23,6 +23,7 @@
 
 #include "../common.h"
 #include "../global_state.h"
+#include "../logging.h"
 #include "../mpi_context.h"
 #include "collective_operations.h"
 
@@ -40,6 +41,8 @@ public:
                const std::vector<TensorTableEntry>& entries,
                const Response& response) const override;
 
+protected:
+  MPIContext* mpi_context_;
   template<class T>
   void PointToPointSend(T* input_data_buffer,
                                       int64_t num_elements,
@@ -108,8 +111,6 @@ public:
     }
   }
 
-protected:
-  MPIContext* mpi_context_;
 };
 
 } // namespace common

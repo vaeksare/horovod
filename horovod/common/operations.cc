@@ -16,6 +16,9 @@
 // limitations under the License.
 // =============================================================================
 
+//TODO assert
+#undef NDEBUG
+
 #include <atomic>
 #include <cassert>
 #include <cstring>
@@ -33,7 +36,6 @@
 #include "global_state.h"
 #include "half.h"
 #include "hashes.h"
-#include "logging.h"
 #include "message.h"
 #include "mpi.h"
 #include "mpi_context.h"

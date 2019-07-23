@@ -32,6 +32,24 @@ Status MsAllreduceOp::Execute(std::vector<TensorTableEntry>& entries, const Resp
     buffer_len = e.output->size();
     recv_buffer = (void*) e.output->data();
     switch (e.output->dtype()) {
+        case HOROVOD_INT8:
+        MsAllreduce_Internal((int8_t*) buffer_data,
+                            (int8_t*) recv_buffer,
+                            buffer_len,
+                            Communicator::GLOBAL,
+                            layerid,
+                            &buffer_len,
+                            1);
+        break;     
+        case HOROVOD_UINT8:
+        MsAllreduce_Internal((uint8_t*) buffer_data,
+                            (uint8_t*) recv_buffer,
+                            buffer_len,
+                            Communicator::GLOBAL,
+                            layerid,
+                            &buffer_len,
+                            1);
+        break;
         case HOROVOD_UINT16:
         MsAllreduce_Internal((uint16_t*) buffer_data,
                             (uint16_t*) recv_buffer,
@@ -44,6 +62,24 @@ Status MsAllreduceOp::Execute(std::vector<TensorTableEntry>& entries, const Resp
         case HOROVOD_INT16:
         MsAllreduce_Internal((int16_t*) buffer_data,
                             (int16_t*) recv_buffer,
+                            buffer_len,
+                            Communicator::GLOBAL,
+                            layerid,
+                            &buffer_len,
+                            1);
+        break;
+        case HOROVOD_INT32:
+        MsAllreduce_Internal((int32_t*) buffer_data,
+                            (int32_t*) recv_buffer,
+                            buffer_len,
+                            Communicator::GLOBAL,
+                            layerid,
+                            &buffer_len,
+                            1);
+        break;
+        case HOROVOD_INT64:
+        MsAllreduce_Internal((int64_t*) buffer_data,
+                            (int64_t*) recv_buffer,
                             buffer_len,
                             Communicator::GLOBAL,
                             layerid,
@@ -74,7 +110,7 @@ Status MsAllreduceOp::Execute(std::vector<TensorTableEntry>& entries, const Resp
 
     layerid++;
   }
-
+  LOG(INFO, global_state_->rank)<<"Finished ms allreduction, exiting operation";
   return Status::OK();
 }
 
@@ -91,6 +127,7 @@ void MsAllreduceOp::MsAllreduce_Internal(T* gradient_buffer, T* result_buffer, i
     int size;
     MPI_Comm_rank(mpi_context_->GetMPICommunicator(communicator), &true_rank);
     MPI_Comm_size(mpi_context_->GetMPICommunicator(communicator), &size);
+    LOG(INFO, global_state_->rank)<<"Starting ms allreduction internal";
 
     int root_node_rotation = message_tag % size;
     redn_rank = (true_rank + root_node_rotation) % size;
@@ -155,7 +192,11 @@ void MsAllreduceOp::MsAllreduce_Internal(T* gradient_buffer, T* result_buffer, i
 }
 template<typename T, typename TACC>
 void MsAllreduceOp::PairwiseReduce_Internal(T* left_tensor, T* right_tensor, int count, int* layer_sizes, int num_layers){
-    int nt = omp_get_max_threads();
+    LOG(INFO, global_state_->rank)<<"Starting pairwise reduction internal";
+    //TODO make this multi-threaded
+    //int nt = omp_get_max_threads();
+    int nt = 1;
+
     const int cache_alignment = 64 / sizeof(TACC);
 
     std::vector<TACC> norms(num_layers*cache_alignment, (TACC)0);
