@@ -55,6 +55,7 @@ protected:
   template<typename T, typename TACC>
   void TAXPY(int n, TACC a, T* __restrict__ x, T* __restrict__ y);
 
+  void Execute_helper(std::map<int, Status>& return_status, TensorTableEntry& entry, const Response& response, int layerid);
 };
 
 } // namespace common

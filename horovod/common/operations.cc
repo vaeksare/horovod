@@ -151,8 +151,9 @@ OperationManager* CreateOperationManager(HorovodGlobalState& state) {
   std::vector<std::shared_ptr<AllgatherOp>> allgather_ops;
   std::vector<std::shared_ptr<BroadcastOp>> broadcast_ops;
   auto msallreduce = std::getenv(HOROVOD_MSALLREDUCE_ENABLE);
-  if (msallreduce != nullptr){
-    LOG(INFO) << "ms allreduce enabled.";
+  LOG(INFO) << "Multithread: "<<state.multithread_enabled;
+  if (msallreduce != nullptr && state.multithread_enabled){
+    LOG(INFO) << "msallreduce enabled.";
     allreduce_ops.push_back(std::shared_ptr<AllreduceOp>(new MsAllreduceOp(&mpi_context, &state)));
   }
 #if HAVE_CUDA
@@ -512,6 +513,44 @@ ResponseList FuseResponses(std::deque<Response>& responses,
                            HorovodGlobalState& state, MPIContext& ctx) {
   ResponseList response_list;
   {
+    //TODO consider to blend this logic into regular response fusion
+    if(state.multithread_enabled == true){
+      auto queue_size = responses.size();
+      // we will merge all tensor names into the first response.
+      Response first_response;
+      for (int itr = 0; itr < queue_size; itr++) {
+        first_response = responses.front();
+        assert(first_response.tensor_names().size() == 1);
+        responses.pop_front();
+        // we find the first allreduce response and make it the host for all subsequent to-be-reduced tensors
+        if (first_response.response_type() == Response::ResponseType::ALLREDUCE) {
+          // increment iterator since we have found one allreduce
+          itr++;
+          while(itr < queue_size) {
+            auto next_response = responses.front();
+            assert(next_response.tensor_names().size() == 1);
+            responses.pop_front();
+            if(next_response.response_type() == first_response.response_type()) {
+              first_response.add_tensor_name(next_response.tensor_names_string());
+              itr++;
+            }
+            else {
+              responses.push_back(next_response);
+            }
+            itr++;
+          }
+        }
+        else {
+          // if response type is not allreduce, we push it back to queue
+          responses.push_back(first_response);
+        }
+      }
+      response_list.add_response(first_response);
+    }
+    // At the end of this loop, all allreduce responses should be taken out. Responses only contain non-allreduce responses.
+    // It's safe to proceed to the response fusion.
+
+
     // Protect access to tensor table.
     std::lock_guard<std::mutex> guard(horovod_global.mutex);
     while (!responses.empty()) {
@@ -730,7 +769,6 @@ void PerformOperation(TensorTable& tensor_table, Response response, HorovodGloba
       timeline.ActivityEnd(e.tensor_name);
     }
   }
-
   Status status;
   try {
     status = op_manager->ExecuteOperation(entries, response);
@@ -1396,15 +1434,10 @@ void RunBypass(std::queue<Request>& message_queue,
 //      If instead of "DONE" they receive "SHUTDOWN", they exit their background
 //      loop.
 
-void my_task()
-{
-  LOG(INFO)<<"*************threads!!!******";
-}
 bool RunLoopOnce(HorovodGlobalState& state, MPIContext& ctx,
                  bool is_coordinator) {
   // This delay determines thread frequency and MPI message latency
-  LOG(INFO, state.rank)<<"Starting loop.";
-  boost::asio::post(*state.background_thread_pool, my_task);
+  //LOG(INFO, state.rank)<<"Starting loop.";
   auto start_time = std::chrono::steady_clock::now();
   auto sleep_duration = state.last_cycle_start +
                         std::chrono::microseconds(
@@ -1429,7 +1462,7 @@ bool RunLoopOnce(HorovodGlobalState& state, MPIContext& ctx,
   // Copy the data structures from global state under this lock.
   // However, don't keep the lock for the rest of the loop, so that
   // enqueued stream callbacks can continue.
-  LOG(INFO, state.rank)<<"Coordinating cache among ranks";
+  //LOG(INFO, state.rank)<<"Coordinating cache among ranks";
   CacheCoordinator cache_coordinator(state.response_cache.num_active_bits());
 
   std::queue<Request> message_queue;

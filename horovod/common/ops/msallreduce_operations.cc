@@ -15,6 +15,7 @@
 // =============================================================================
 
 #include "msallreduce_operations.h"
+#include <boost/asio/post.hpp>
 
 namespace horovod {
 namespace common {
@@ -23,16 +24,39 @@ MsAllreduceOp::MsAllreduceOp(MPIContext* mpi_context, HorovodGlobalState* global
     : PointToPointOp(mpi_context, global_state) {}
 
 Status MsAllreduceOp::Execute(std::vector<TensorTableEntry>& entries, const Response& response) {
+  //TODO how do we report statuses?
+  std::map<int, Status> return_statuses;
   int layerid = 0;
+  int num_reductions = entries.size();
   for (auto& e : entries) {
+    LOG(INFO, global_state_->rank)<<"Executing msallreduce.";
+    boost::asio::post(*global_state_->background_thread_pool,
+    [&return_statuses, this, &e, response, layerid]
+    {
+      LOG(INFO, global_state_->rank)<<"Begin processing tensor in parallel.";
+      Execute_helper(return_statuses, e, response, layerid);
+      LOG(INFO, global_state_->rank)<<"Done processing tensor in parallel.";
+      global_state_->finished_parallel_reductions++;
+    });
+    layerid++;
+  }
+  while (global_state_->finished_parallel_reductions < num_reductions) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  global_state_->finished_parallel_reductions = 0;
+
+  return Status::OK();
+}
+
+void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorTableEntry& entry, const Response& response, int layerid){
     void* buffer_data;
     int buffer_len;
     void* recv_buffer;
-    buffer_data = (void*) e.tensor->data();
-    buffer_len = e.output->size();
-    recv_buffer = (void*) e.output->data();
-    LOG(INFO, global_state_->rank)<<"Begin to process tensor with size "<<e.tensor->size()<<" into output buffer with size "<<e.output->size();
-    switch (e.output->dtype()) {
+    buffer_data = (void*) entry.tensor->data();
+    buffer_len = entry.output->size();
+    recv_buffer = (void*) entry.output->data();
+    LOG(INFO, global_state_->rank)<<"Begin to process tensor with size "<<entry.tensor->size()<<" into output buffer with size "<<entry.output->size();
+    switch (entry.output->dtype()) {
         case HOROVOD_INT8:
         MsAllreduce_Internal((int8_t*) buffer_data,
                             (int8_t*) recv_buffer,
@@ -106,15 +130,23 @@ Status MsAllreduceOp::Execute(std::vector<TensorTableEntry>& entries, const Resp
                             1);
         break;
         default:
-        return Status::InvalidArgument("MS allreduction only supports double, float and float16 types.");
+        return_status[layerid] = Status::InvalidArgument("MS allreduction only supports double, float and float16 types.");
     }
     
-    std::memcpy((void*)e.output->data(), buffer_data,
-                (size_t)e.tensor->size());
-    layerid++;
-  }
+    std::memcpy((void*)entry.output->data(), buffer_data,
+                (size_t)entry.tensor->size());
+  //TODO debug only, delete after fixing seg fault
+//   float* temp = (float*) entry.output->data();
+//   int i = 0;
+//   while(i < entry.tensor->size()/sizeof(float))
+//   {
+//       LOG(INFO, global_state_->rank)<<*temp;
+//       temp++;
+//       i++;
+//   }
+
+  return_status[layerid] = Status::OK();
   LOG(INFO, global_state_->rank)<<"Finished ms allreduction, exiting operation";
-  return Status::OK();
 }
 
 bool MsAllreduceOp::Enabled(const ParameterManager& param_manager,
@@ -199,8 +231,8 @@ template<typename T, typename TACC>
 void MsAllreduceOp::PairwiseReduce_Internal(T* left_tensor, T* right_tensor, int count, int* layer_sizes, int num_layers){
     LOG(INFO, global_state_->rank)<<"Starting pairwise reduction internal";
     //TODO make this multi-threaded
-    int nt = omp_get_max_threads();
-    //int nt = 1;
+    //int nt = omp_get_max_threads();
+    int nt = 1;
 
     const int cache_alignment = 64 / sizeof(TACC);
 

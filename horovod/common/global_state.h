@@ -57,6 +57,13 @@ struct HorovodGlobalState {
   // Thread pool
   boost::asio::thread_pool* background_thread_pool;
   
+  //flag to indicate usage of multiple threads
+  bool multithread_enabled = false;
+  
+  // Counter used to keep track of how many of the parallel reductions finished
+  // TODO do we need this?
+  std::atomic_int finished_parallel_reductions;
+
   HorovodGlobalState(bool multi_threaded = false) {
     if (multi_threaded == true){
       auto horovod_number_of_threads = std::getenv(HOROVOD_NUMBER_OF_MPI_THREADS);
@@ -65,15 +72,15 @@ struct HorovodGlobalState {
         if (num_threads < 1){
            throw std::logic_error("Number of threads must be greater or equal to 1.");
         }
+        //Making this static so that this pool is preverved throughout the lifetime of the program
         static boost::asio::thread_pool pool(num_threads);
         background_thread_pool = &pool;
+        multithread_enabled = true;
       }
     }
+    finished_parallel_reductions = 0;
   }
   
-  // Counter used to keep track of how many of the parallel reductions finished
-  std::atomic_int finished_parallel_reductions;
-
   // Background thread running MPI communication.
   std::thread background_thread;
 
@@ -177,6 +184,10 @@ struct HorovodGlobalState {
     if (background_thread.joinable()) {
       shut_down = true;
       background_thread.join();
+    }
+    //TODO merge this with background thread
+    if(background_thread_pool != nullptr){
+      background_thread_pool->stop();
     }
   }
 };
