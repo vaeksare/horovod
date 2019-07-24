@@ -32,14 +32,20 @@ class MPITests(tf.test.TestCase):
 
     def test_horovod_allreduce_cpu(self):
         """Test on CPU that the allreduce correctly sums 1D, 2D, 3D tensors."""
-        tensor = tf.constant([[1.0, 2.0], [3.0, 4.0]])
-        tf.contrib.util.constant_value(tensor)
         hvd.init()
         size = hvd.size()
-        dtype = tf.float32
-        dim = 2
-        summed = hvd.allreduce(tensor, average=False)
+        with tf.device("/cpu:0"):
+            if hvd.rank() == 0:
+                tensor = tf.constant([[1.0, 2.0], [3.0, 4.0]])
+            else:
+                tensor = tf.constant([[5.0, 6.0], [7.0, 8.0]])
+            tf.contrib.util.constant_value(tensor)
+            summed = hvd.allreduce(tensor, average=False)
         diff = self.evaluate(summed)
         print(diff)
+    def test_horovod_multithread_init(self):
+        """Test thread pool init"""
+        hvd.init()
+
 if __name__ == '__main__':
     tf.test.main()

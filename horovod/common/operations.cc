@@ -100,8 +100,7 @@ namespace common {
 namespace {
 
 // All the Horovod state that must be stored globally per-process.
-HorovodGlobalState horovod_global;
-
+HorovodGlobalState horovod_global(true);
 MPIContext mpi_context;
 
 #if HAVE_GLOO
@@ -656,7 +655,7 @@ int64_t GetTensorDataForAutotuner(const ResponseList& response_list,
 
 // Process a Response by doing a reduction, a gather, a broadcast, or
 // raising an error.
-void PerformOperation(TensorTable& tensor_table, Response response) {
+void PerformOperation(TensorTable& tensor_table, Response response, HorovodGlobalState& state) {
   std::vector<TensorTableEntry> entries;
   // Reserve to save re-allocation costs, as we know the size before.
   entries.reserve(response.tensor_names().size());
@@ -745,6 +744,7 @@ void PerformOperation(TensorTable& tensor_table, Response response) {
       e.callback(status);
     }
   }
+  LOG(INFO, state.rank)<<"*****Perform Operation done. Going back to main loop*****";
 }
 
 // Report Tensors that were submitted to be reduced, gathered or broadcasted by
@@ -1353,7 +1353,7 @@ void RunBypass(std::queue<Request>& message_queue,
     LOG(TRACE, state.rank) << "Performing " << response.tensor_names_string();
     LOG(DEBUG, state.rank) << "Processing " << response.tensor_names().size()
                            << " tensors";
-    PerformOperation(state.tensor_table, response);
+    PerformOperation(state.tensor_table, response, state);
     LOG(TRACE, state.rank) << "Finished performing "
                            << response.tensor_names_string();
   }
@@ -1395,9 +1395,16 @@ void RunBypass(std::queue<Request>& message_queue,
 //      response from the coordinator. At that point, the tick ends.
 //      If instead of "DONE" they receive "SHUTDOWN", they exit their background
 //      loop.
+
+void my_task()
+{
+  LOG(INFO)<<"*************threads!!!******";
+}
 bool RunLoopOnce(HorovodGlobalState& state, MPIContext& ctx,
                  bool is_coordinator) {
   // This delay determines thread frequency and MPI message latency
+  LOG(INFO, state.rank)<<"Starting loop.";
+  boost::asio::post(*state.background_thread_pool, my_task);
   auto start_time = std::chrono::steady_clock::now();
   auto sleep_duration = state.last_cycle_start +
                         std::chrono::microseconds(
@@ -1422,7 +1429,7 @@ bool RunLoopOnce(HorovodGlobalState& state, MPIContext& ctx,
   // Copy the data structures from global state under this lock.
   // However, don't keep the lock for the rest of the loop, so that
   // enqueued stream callbacks can continue.
-
+  LOG(INFO, state.rank)<<"Coordinating cache among ranks";
   CacheCoordinator cache_coordinator(state.response_cache.num_active_bits());
 
   std::queue<Request> message_queue;
@@ -1702,7 +1709,7 @@ bool RunLoopOnce(HorovodGlobalState& state, MPIContext& ctx,
     LOG(TRACE, state.rank) << "Performing " << response.tensor_names_string();
     LOG(DEBUG, state.rank) << "Processing " << response.tensor_names().size()
                            << " tensors";
-    PerformOperation(state.tensor_table, response);
+    PerformOperation(state.tensor_table, response, state);
     LOG(TRACE, state.rank) << "Finished performing "
                            << response.tensor_names_string();
   }

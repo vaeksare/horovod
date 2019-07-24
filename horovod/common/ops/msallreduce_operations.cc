@@ -31,6 +31,7 @@ Status MsAllreduceOp::Execute(std::vector<TensorTableEntry>& entries, const Resp
     buffer_data = (void*) e.tensor->data();
     buffer_len = e.output->size();
     recv_buffer = (void*) e.output->data();
+    LOG(INFO, global_state_->rank)<<"Begin to process tensor with size "<<e.tensor->size()<<" into output buffer with size "<<e.output->size();
     switch (e.output->dtype()) {
         case HOROVOD_INT8:
         MsAllreduce_Internal((int8_t*) buffer_data,
@@ -107,7 +108,9 @@ Status MsAllreduceOp::Execute(std::vector<TensorTableEntry>& entries, const Resp
         default:
         return Status::InvalidArgument("MS allreduction only supports double, float and float16 types.");
     }
-
+    
+    std::memcpy((void*)e.output->data(), buffer_data,
+                (size_t)e.tensor->size());
     layerid++;
   }
   LOG(INFO, global_state_->rank)<<"Finished ms allreduction, exiting operation";
@@ -152,10 +155,12 @@ void MsAllreduceOp::MsAllreduce_Internal(T* gradient_buffer, T* result_buffer, i
         if ((redn_rank & level) == 0) {
             // recv buffer from neighbor
             PointToPointRecv(result_buffer, count, neighbor_true_rank, message_tag, communicator);
+
             PairwiseReduce_Internal<T, T>(gradient_buffer, result_buffer, (int) count, layer_sizes, num_layers);
         }
         else {
             // send gradient_buffer to neighbor
+
             PointToPointSend(gradient_buffer, count, neighbor_true_rank, message_tag, communicator);
         }
     }
@@ -181,7 +186,7 @@ void MsAllreduceOp::MsAllreduce_Internal(T* gradient_buffer, T* result_buffer, i
 
         if ((redn_rank & level) == 0) {
             // send gradient_buffer to neighbor
-            // and dont wait for the send to finish	      
+            // and dont wait for the send to finish
             PointToPointSend(gradient_buffer, count, neighbor_true_rank, message_tag, communicator);
         }
         else {
@@ -194,8 +199,8 @@ template<typename T, typename TACC>
 void MsAllreduceOp::PairwiseReduce_Internal(T* left_tensor, T* right_tensor, int count, int* layer_sizes, int num_layers){
     LOG(INFO, global_state_->rank)<<"Starting pairwise reduction internal";
     //TODO make this multi-threaded
-    //int nt = omp_get_max_threads();
-    int nt = 1;
+    int nt = omp_get_max_threads();
+    //int nt = 1;
 
     const int cache_alignment = 64 / sizeof(TACC);
 

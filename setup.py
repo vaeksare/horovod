@@ -591,6 +591,9 @@ def get_common_options(build_ext):
                 'third_party/boost/static_assert/include',
                 'third_party/boost/type_traits/include',
                 'third_party/boost/utility/include',
+                'third_party/boost/asio/include',   
+                'third_party/boost/system/include',
+                'third_party/boost/throw_exception/include',
                 'third_party/eigen',
                 'third_party/flatbuffers/include',
                 'third_party/lbfgs/include']

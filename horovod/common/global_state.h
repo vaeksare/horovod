@@ -19,6 +19,8 @@
 
 #include <queue>
 #include <thread>
+#include <boost/asio/thread_pool.hpp>
+#include <boost/asio/post.hpp>
 
 #include "fusion_buffer_manager.h"
 #include "parameter_manager.h"
@@ -50,7 +52,27 @@ struct HorovodGlobalState {
   std::mutex mutex;
 
   // Tensors waiting to be allreduced or allgathered.
-  TensorTable tensor_table;
+  TensorTable tensor_table;  
+
+  // Thread pool
+  boost::asio::thread_pool* background_thread_pool;
+  
+  HorovodGlobalState(bool multi_threaded = false) {
+    if (multi_threaded == true){
+      auto horovod_number_of_threads = std::getenv(HOROVOD_NUMBER_OF_MPI_THREADS);
+      if (horovod_number_of_threads != nullptr){
+        int num_threads = std::strtol(horovod_number_of_threads, nullptr, 10);
+        if (num_threads < 1){
+           throw std::logic_error("Number of threads must be greater or equal to 1.");
+        }
+        static boost::asio::thread_pool pool(num_threads);
+        background_thread_pool = &pool;
+      }
+    }
+  }
+  
+  // Counter used to keep track of how many of the parallel reductions finished
+  std::atomic_int finished_parallel_reductions;
 
   // Background thread running MPI communication.
   std::thread background_thread;

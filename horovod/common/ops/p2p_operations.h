@@ -85,8 +85,8 @@ protected:
     int status;                            
     if (!global_state_->msg_chunk_enabled) {
         status = MPI_Recv(output_data_buffer,
-                          (int)num_elements * sizeof(T),
-                          MPI_CHAR,
+                          (int)num_elements ,//* sizeof(T),
+                          MPI_FLOAT,
                           src_rank,
                           tag,
                           mpi_context_->GetMPICommunicator(communicator),
