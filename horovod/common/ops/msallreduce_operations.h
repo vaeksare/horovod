@@ -44,10 +44,10 @@ public:
 
 protected:
   template<typename T>
-  void MsAllreduce_Internal(T* gradient_buffer, T* result_buffer, int64_t count, Communicator communicator, int message_tag, int* layer_sizes, int num_layers);
+  void MsAllreduce_Internal(T* gradient_buffer, T* result_buffer, int64_t buffer_length, Communicator communicator, int message_tag, int* layer_sizes, int num_layers);
   
   template<typename T, typename TACC>
-  void PairwiseReduce_Internal(T* left_tensor, T* right_tensor, int count, int* layer_sizes, int num_layers);
+  void PairwiseReduce_Internal(T* left_tensor, T* right_tensor, int cobuffer_lengthunt, int* layer_sizes, int num_layers);
 
   template<typename T, typename TACC>
   void ComputeDotAndNormSqrd(const T* __restrict__ a, const T* __restrict__ b, int n, TACC& dotProduct, TACC& normsq);

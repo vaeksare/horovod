@@ -31,13 +31,14 @@ Status MsAllreduceOp::Execute(std::vector<TensorTableEntry>& entries, const Resp
   std::map<int, Status> return_statuses;
   int layerid = 0;
   int num_reductions = entries.size();
+  LOG(INFO, global_state_->rank)<<"REady to process "<<num_reductions<<" tensors";
   for (auto& e : entries) {
     boost::asio::post(*global_state_->background_thread_pool,
     [&return_statuses, this, &e, response, layerid]
     {
-      LOG(INFO, global_state_->rank)<<"Begin processing tensor in parallel.";
+      LOG(INFO, global_state_->rank)<<"Begin processing tensor in layer ."<<layerid;
       Execute_helper(return_statuses, e, response, layerid);
-      LOG(INFO, global_state_->rank)<<"Done processing tensor in parallel.";
+      LOG(INFO, global_state_->rank)<<"Done processing tensor in layer."<<layerid;
       global_state_->finished_parallel_reductions++;
     });
     layerid++;
@@ -62,9 +63,10 @@ void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorT
     if(entry.tensor->data() == entry.output->data()) {
         LOG(INFO, global_state_->rank)<<"output and input pointing to same buffer.";
     }
-    LOG(INFO, global_state_->rank)<<"Begin to process tensor with size "<<entry.tensor->size()<<" into output buffer with size "<<entry.output->size();
+    LOG(INFO, global_state_->rank)<<"Begin to process tensor with size "<<buffer_len<<" into output buffer with size "<<buffer_len;
     switch (entry.output->dtype()) {
         case HOROVOD_INT8:
+        
         MsAllreduce_Internal((int8_t*) buffer_data,
                             (int8_t*) recv_buffer,
                             buffer_len,
@@ -137,7 +139,7 @@ void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorT
                             1);
         break;
         default:
-        return_status[layerid] = Status::InvalidArgument("MS allreduction only supports double, float and float16 types.");
+        return_status[layerid] = Status::InvalidArgument("Unsupported msallreduce type");
     }
     
     std::memcpy((void*)entry.output->data(), buffer_data,
@@ -154,7 +156,7 @@ bool MsAllreduceOp::Enabled(const ParameterManager& param_manager,
 }
 
 template<typename T>
-void MsAllreduceOp::MsAllreduce_Internal(T* gradient_buffer, T* result_buffer, int64_t count, Communicator communicator, int message_tag, int* layer_sizes, int num_layers){
+void MsAllreduceOp::MsAllreduce_Internal(T* gradient_buffer, T* result_buffer, int64_t buffer_length, Communicator communicator, int message_tag, int* layer_sizes, int num_layers){
     int true_rank;
     int redn_rank;
     int size;
@@ -184,13 +186,13 @@ void MsAllreduceOp::MsAllreduce_Internal(T* gradient_buffer, T* result_buffer, i
 
         if ((redn_rank & level) == 0) {
             // recv buffer from neighbor
-            PointToPointRecv(result_buffer, count, neighbor_true_rank, message_tag, communicator);
+            PointToPointRecv(result_buffer, buffer_length, neighbor_true_rank, message_tag, communicator);
 
-            PairwiseReduce_Internal<T, T>(gradient_buffer, result_buffer, (int) count, layer_sizes, num_layers);
+            PairwiseReduce_Internal<T, T>(gradient_buffer, result_buffer, (int) buffer_length, layer_sizes, num_layers);
         }
         else {
             // send gradient_buffer to neighbor
-            PointToPointSend(gradient_buffer, count, neighbor_true_rank, message_tag, communicator);
+            PointToPointSend(gradient_buffer, buffer_length, neighbor_true_rank, message_tag, communicator);
         }
     }
 
@@ -216,20 +218,26 @@ void MsAllreduceOp::MsAllreduce_Internal(T* gradient_buffer, T* result_buffer, i
         if ((redn_rank & level) == 0) {
             // send gradient_buffer to neighbor
             // and dont wait for the send to finish
-            PointToPointSend(gradient_buffer, count, neighbor_true_rank, message_tag, communicator);
+            PointToPointSend(gradient_buffer, buffer_length, neighbor_true_rank, message_tag, communicator);
         }
         else {
             // recv gradient_buffer from neighbor
-            PointToPointRecv(gradient_buffer, count, neighbor_true_rank, message_tag, communicator);
+            PointToPointRecv(gradient_buffer, buffer_length, neighbor_true_rank, message_tag, communicator);
         }
     }
 }
 template<typename T, typename TACC>
-void MsAllreduceOp::PairwiseReduce_Internal(T* left_tensor, T* right_tensor, int count, int* layer_sizes, int num_layers){
+void MsAllreduceOp::PairwiseReduce_Internal(T* left_tensor, T* right_tensor, int buffer_length, int* layer_sizes, int num_layers){
     LOG(INFO, global_state_->rank)<<"Starting pairwise reduction internal";
     //TODO make this multi-threaded
     //int nt = omp_get_max_threads();
     int nt = 1;
+    
+    // Get number of elements
+    int count = buffer_length/sizeof(T);
+    for(int i = 0; i < num_layers; i++) {
+        layer_sizes[i] = layer_sizes[i]/sizeof(T);
+    }
 
     const int cache_alignment = 64 / sizeof(TACC);
 

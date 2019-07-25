@@ -45,14 +45,14 @@ protected:
   MPIContext* mpi_context_;
   template<class T>
   void PointToPointSend(T* input_data_buffer,
-                                      int64_t num_elements,
+                                      int64_t buffer_length,
                                       int dest_rank,
                                       int tag,
                                       Communicator communicator) {
     int status;                            
     if (!global_state_->msg_chunk_enabled) {
         status = MPI_Send(input_data_buffer,
-                          (int)num_elements,
+                          (int)buffer_length,
                           MPI_CHAR,
                           dest_rank,
                           tag,
@@ -60,9 +60,9 @@ protected:
     }
     else {
           const int chunk_size = P2P_MESSAGE_CHUNK_SIZE / sizeof(T);
-          for (int buf_index = 0; buf_index < num_elements; buf_index += chunk_size) {
+          for (int buf_index = 0; buf_index < buffer_length; buf_index += chunk_size) {
             status = MPI_Send((uint8_t *)input_data_buffer + buf_index,
-                              std::min((int)num_elements - buf_index, chunk_size) * sizeof(T),
+                              std::min((int)buffer_length - buf_index, chunk_size) * sizeof(T),
                               MPI_CHAR,
                               dest_rank,
                               tag,
@@ -78,14 +78,14 @@ protected:
 
   template<class T>
   void PointToPointRecv(T* output_data_buffer,
-                                      int64_t num_elements,
+                                      int64_t buffer_length,
                                       int src_rank,
                                       int tag,
                                       Communicator communicator) {
     int status;                            
     if (!global_state_->msg_chunk_enabled) {
         status = MPI_Recv(output_data_buffer,
-                          (int)num_elements,
+                          (int)buffer_length,
                           MPI_CHAR,
                           src_rank,
                           tag,
@@ -94,9 +94,9 @@ protected:
     }
     else {
           const int chunk_size = P2P_MESSAGE_CHUNK_SIZE / sizeof(T);
-          for (int buf_index = 0; buf_index < num_elements; buf_index += chunk_size) {
+          for (int buf_index = 0; buf_index < buffer_length; buf_index += chunk_size) {
             status = MPI_Recv((uint8_t *)output_data_buffer + buf_index,
-                              std::min((int)num_elements - buf_index, chunk_size) * sizeof(T),
+                              std::min((int)buffer_length - buf_index, chunk_size) * sizeof(T),
                               MPI_CHAR,
                               src_rank,
                               tag,
