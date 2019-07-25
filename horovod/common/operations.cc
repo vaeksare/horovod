@@ -532,7 +532,6 @@ ResponseList FuseResponses(std::deque<Response>& responses,
             responses.pop_front();
             if(next_response.response_type() == first_response.response_type()) {
               first_response.add_tensor_name(next_response.tensor_names_string());
-              itr++;
             }
             else {
               responses.push_back(next_response);
@@ -546,6 +545,11 @@ ResponseList FuseResponses(std::deque<Response>& responses,
         }
       }
       response_list.add_response(first_response);
+    }
+    LOG(INFO, state.rank)<<"response list contains "<<response_list.responses().size();
+    int i = 0;
+    for(auto response : response_list.responses()) {
+      LOG(INFO, state.rank)<<"***response is: "<<response.tensor_names_string();
     }
     // At the end of this loop, all allreduce responses should be taken out. Responses only contain non-allreduce responses.
     // It's safe to proceed to the response fusion.
@@ -750,6 +754,7 @@ void PerformOperation(TensorTable& tensor_table, Response response, HorovodGloba
     if (e.ready_event != nullptr) {
       timeline.ActivityStart(e.tensor_name, WAIT_FOR_DATA);
       waiting_tensors.push_back(e);
+      LOG(INFO, state.rank)<<"adding waiting tensor.";
     }
   }
   while (!waiting_tensors.empty()) {
@@ -758,6 +763,7 @@ void PerformOperation(TensorTable& tensor_table, Response response, HorovodGloba
         timeline.ActivityEnd(it->tensor_name);
         timeline.ActivityStart(it->tensor_name, WAIT_FOR_OTHER_TENSOR_DATA);
         it = waiting_tensors.erase(it);
+        LOG(INFO, state.rank)<<"Erased a ready tensor.";
       } else {
         ++it;
       }
@@ -1738,6 +1744,12 @@ bool RunLoopOnce(HorovodGlobalState& state, MPIContext& ctx,
 
   // Perform the collective operation. All nodes should end up performing
   // the same operation.
+
+    LOG(INFO, state.rank)<<"response list contains "<<response_list.responses().size();
+    for(auto response : response_list.responses()) {
+      LOG(INFO, state.rank)<<"***response is: "<<response.tensor_names_string();
+    }
+
   for (auto& response : response_list.responses()) {
     LOG(TRACE, state.rank) << "Performing " << response.tensor_names_string();
     LOG(DEBUG, state.rank) << "Processing " << response.tensor_names().size()

@@ -24,12 +24,14 @@ MsAllreduceOp::MsAllreduceOp(MPIContext* mpi_context, HorovodGlobalState* global
     : PointToPointOp(mpi_context, global_state) {}
 
 Status MsAllreduceOp::Execute(std::vector<TensorTableEntry>& entries, const Response& response) {
+  if(entries.size() < 1) {
+      return Status::OK();
+  }
   //TODO how do we report statuses?
   std::map<int, Status> return_statuses;
   int layerid = 0;
   int num_reductions = entries.size();
   for (auto& e : entries) {
-    LOG(INFO, global_state_->rank)<<"Executing msallreduce.";
     boost::asio::post(*global_state_->background_thread_pool,
     [&return_statuses, this, &e, response, layerid]
     {
@@ -53,8 +55,13 @@ void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorT
     int buffer_len;
     void* recv_buffer;
     buffer_data = (void*) entry.tensor->data();
+
     buffer_len = entry.output->size();
     recv_buffer = (void*) entry.output->data();
+    //TODO fix this
+    if(entry.tensor->data() == entry.output->data()) {
+        LOG(INFO, global_state_->rank)<<"output and input pointing to same buffer.";
+    }
     LOG(INFO, global_state_->rank)<<"Begin to process tensor with size "<<entry.tensor->size()<<" into output buffer with size "<<entry.output->size();
     switch (entry.output->dtype()) {
         case HOROVOD_INT8:
@@ -135,15 +142,6 @@ void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorT
     
     std::memcpy((void*)entry.output->data(), buffer_data,
                 (size_t)entry.tensor->size());
-  //TODO debug only, delete after fixing seg fault
-//   float* temp = (float*) entry.output->data();
-//   int i = 0;
-//   while(i < entry.tensor->size()/sizeof(float))
-//   {
-//       LOG(INFO, global_state_->rank)<<*temp;
-//       temp++;
-//       i++;
-//   }
 
   return_status[layerid] = Status::OK();
   LOG(INFO, global_state_->rank)<<"Finished ms allreduction, exiting operation";
@@ -192,7 +190,6 @@ void MsAllreduceOp::MsAllreduce_Internal(T* gradient_buffer, T* result_buffer, i
         }
         else {
             // send gradient_buffer to neighbor
-
             PointToPointSend(gradient_buffer, count, neighbor_true_rank, message_tag, communicator);
         }
     }

@@ -52,7 +52,7 @@ protected:
     int status;                            
     if (!global_state_->msg_chunk_enabled) {
         status = MPI_Send(input_data_buffer,
-                          (int)num_elements * sizeof(T),
+                          (int)num_elements,
                           MPI_CHAR,
                           dest_rank,
                           tag,
@@ -85,8 +85,8 @@ protected:
     int status;                            
     if (!global_state_->msg_chunk_enabled) {
         status = MPI_Recv(output_data_buffer,
-                          (int)num_elements ,//* sizeof(T),
-                          MPI_FLOAT,
+                          (int)num_elements,
+                          MPI_CHAR,
                           src_rank,
                           tag,
                           mpi_context_->GetMPICommunicator(communicator),
