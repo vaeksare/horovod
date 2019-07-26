@@ -744,7 +744,8 @@ void PerformOperation(TensorTable& tensor_table, Response response, HorovodGloba
         first_entry.device, first_entry.context,
         horovod_global.current_nccl_stream,
         [&](){timeline.ActivityStartAll(entries, INIT_FUSION_BUFFER);},
-        [&](){timeline.ActivityEndAll(entries);});
+        [&](){timeline.ActivityEndAll(entries);},
+        [](int64_t& size, int64_t& threshold){return size == threshold;});
     if (!status.ok()) {
       for (auto& e : entries) {
         timeline.End(e.tensor_name, nullptr);
