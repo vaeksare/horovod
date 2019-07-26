@@ -100,7 +100,7 @@ namespace common {
 namespace {
 
 // All the Horovod state that must be stored globally per-process.
-HorovodGlobalState horovod_global(true);
+HorovodGlobalState horovod_global;
 MPIContext mpi_context;
 
 #if HAVE_GLOO
@@ -513,11 +513,14 @@ ResponseList FuseResponses(std::deque<Response>& responses,
                            HorovodGlobalState& state, MPIContext& ctx) {
   ResponseList response_list;
   {
+    // Protect access to tensor table.
+    std::lock_guard<std::mutex> guard(horovod_global.mutex);
     //TODO consider to blend this logic into regular response fusion
     if(state.multithread_enabled == true){
       auto queue_size = responses.size();
       // we will merge all tensor names into the first response.
       Response first_response;
+      bool allreduce_merged = false;
       for (int itr = 0; itr < queue_size; itr++) {
         first_response = responses.front();
         assert(first_response.tensor_names().size() == 1);
@@ -525,6 +528,8 @@ ResponseList FuseResponses(std::deque<Response>& responses,
         // we find the first allreduce response and make it the host for all subsequent to-be-reduced tensors
         if (first_response.response_type() == Response::ResponseType::ALLREDUCE) {
           // increment iterator since we have found one allreduce
+          LOG(INFO, state.rank)<<"Found 1 Allreduce request.";
+          allreduce_merged = true;
           itr++;
           while(itr < queue_size) {
             auto next_response = responses.front();
@@ -544,7 +549,11 @@ ResponseList FuseResponses(std::deque<Response>& responses,
           responses.push_back(first_response);
         }
       }
-      response_list.add_response(first_response);
+      // we add it to response_list only if we have merged allreduce requests.
+      // FOr other requests, they will be processed in the following section.
+      if(allreduce_merged == true) {
+        response_list.add_response(first_response);
+      }
     }
     LOG(INFO, state.rank)<<"response list contains "<<response_list.responses().size();
     int i = 0;
@@ -554,9 +563,6 @@ ResponseList FuseResponses(std::deque<Response>& responses,
     // At the end of this loop, all allreduce responses should be taken out. Responses only contain non-allreduce responses.
     // It's safe to proceed to the response fusion.
 
-
-    // Protect access to tensor table.
-    std::lock_guard<std::mutex> guard(horovod_global.mutex);
     while (!responses.empty()) {
 
       auto response = responses.front();
@@ -788,7 +794,6 @@ void PerformOperation(TensorTable& tensor_table, Response response, HorovodGloba
       e.callback(status);
     }
   }
-  LOG(INFO, state.rank)<<"*****Perform Operation done. Going back to main loop*****";
 }
 
 // Report Tensors that were submitted to be reduced, gathered or broadcasted by

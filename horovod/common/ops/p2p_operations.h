@@ -23,7 +23,6 @@
 
 #include "../common.h"
 #include "../global_state.h"
-#include "../logging.h"
 #include "../mpi_context.h"
 #include "collective_operations.h"
 

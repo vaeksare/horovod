@@ -26,6 +26,7 @@
 #include "parameter_manager.h"
 #include "response_cache.h"
 #include "timeline.h"
+#include "logging.h"
 
 namespace horovod {
 namespace common {
@@ -64,15 +65,21 @@ struct HorovodGlobalState {
   // TODO do we need this?
   std::atomic_int finished_parallel_reductions;
 
-  HorovodGlobalState(bool multi_threaded = false) {
-    if (multi_threaded == true){
-      auto horovod_number_of_threads = std::getenv(HOROVOD_NUMBER_OF_MPI_THREADS);
-      if (horovod_number_of_threads != nullptr){
-        int num_threads = std::strtol(horovod_number_of_threads, nullptr, 10);
-        if (num_threads < 1){
-           throw std::logic_error("Number of threads must be greater or equal to 1.");
-        }
+  HorovodGlobalState() {
+    auto horovod_number_of_threads = std::getenv(HOROVOD_NUMBER_OF_MPI_THREADS);
+      
+    if (horovod_number_of_threads != nullptr){
+      int num_threads = std::strtol(horovod_number_of_threads, nullptr, 10);
+      LOG(INFO)<<"HOROVOD_NUMBER_OF_MPI_THREADS is set to "<<num_threads;
+      if (num_threads < 0){
+        throw std::logic_error("Number of threads must be greater or equal to 0.");
+      }
+      else if (num_threads == 0) {
+        LOG(INFO)<<"Starting Horovod in main thread only.";
+      }
+      else {
         //Making this static so that this pool is preverved throughout the lifetime of the program
+        LOG(INFO)<<"Starting "<<num_threads<<" MPI threads for threadpool.";
         static boost::asio::thread_pool pool(num_threads);
         background_thread_pool = &pool;
         multithread_enabled = true;

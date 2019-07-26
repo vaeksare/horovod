@@ -31,20 +31,20 @@ Status MsAllreduceOp::Execute(std::vector<TensorTableEntry>& entries, const Resp
   std::map<int, Status> return_statuses;
   int layerid = 0;
   int num_reductions = entries.size();
-  LOG(INFO, global_state_->rank)<<"REady to process "<<num_reductions<<" tensors";
+  LOG(INFO, global_state_->rank)<<"Ready to process "<<num_reductions<<" tensors";
   for (auto& e : entries) {
     boost::asio::post(*global_state_->background_thread_pool,
     [&return_statuses, this, &e, response, layerid]
     {
-      LOG(INFO, global_state_->rank)<<"Begin processing tensor in layer ."<<layerid;
+      LOG(INFO, global_state_->rank)<<"Begin processing tensor in layer "<<layerid;
       Execute_helper(return_statuses, e, response, layerid);
-      LOG(INFO, global_state_->rank)<<"Done processing tensor in layer."<<layerid;
+      LOG(INFO, global_state_->rank)<<"Done processing tensor in layer "<<layerid;
       global_state_->finished_parallel_reductions++;
     });
     layerid++;
   }
   while (global_state_->finished_parallel_reductions < num_reductions) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    std::this_thread::sleep_for(std::chrono::microseconds(50));
   }
   global_state_->finished_parallel_reductions = 0;
 
@@ -186,12 +186,14 @@ void MsAllreduceOp::MsAllreduce_Internal(T* gradient_buffer, T* result_buffer, i
 
         if ((redn_rank & level) == 0) {
             // recv buffer from neighbor
+            LOG(INFO, global_state_->rank)<<"Reduction: receiving from neighbor";
             PointToPointRecv(result_buffer, buffer_length, neighbor_true_rank, message_tag, communicator);
 
             PairwiseReduce_Internal<T, T>(gradient_buffer, result_buffer, (int) buffer_length, layer_sizes, num_layers);
         }
         else {
             // send gradient_buffer to neighbor
+            LOG(INFO, global_state_->rank)<<"Reduction: sending to neighbor";
             PointToPointSend(gradient_buffer, buffer_length, neighbor_true_rank, message_tag, communicator);
         }
     }
@@ -218,10 +220,12 @@ void MsAllreduceOp::MsAllreduce_Internal(T* gradient_buffer, T* result_buffer, i
         if ((redn_rank & level) == 0) {
             // send gradient_buffer to neighbor
             // and dont wait for the send to finish
+            LOG(INFO, global_state_->rank)<<"Reverse bcasting: sending to neighbor";
             PointToPointSend(gradient_buffer, buffer_length, neighbor_true_rank, message_tag, communicator);
         }
         else {
-            // recv gradient_buffer from neighbor
+            // recv gradient_buffer from 
+            LOG(INFO, global_state_->rank)<<"Reverse bcasting: Receiving from neighbor";
             PointToPointRecv(gradient_buffer, buffer_length, neighbor_true_rank, message_tag, communicator);
         }
     }
@@ -237,7 +241,9 @@ void MsAllreduceOp::PairwiseReduce_Internal(T* left_tensor, T* right_tensor, int
     int count = buffer_length/sizeof(T);
     for(int i = 0; i < num_layers; i++) {
         layer_sizes[i] = layer_sizes[i]/sizeof(T);
+        LOG(INFO, global_state_->rank)<<"layer_sizes at i: "<<i<<" is "<<layer_sizes[i];
     }
+    LOG(INFO, global_state_->rank)<<"Processing total "<<count<<" elements";
 
     const int cache_alignment = 64 / sizeof(TACC);
 
@@ -306,6 +312,7 @@ void MsAllreduceOp::PairwiseReduce_Internal(T* left_tensor, T* right_tensor, int
             TAXPY(end - begin, coeff, &right_tensor[begin], &left_tensor[begin]);
         }
     }
+    LOG(INFO, global_state_->rank)<<"Returning from pairwise reduction.";
 }
 
 template<typename T, typename TACC>
