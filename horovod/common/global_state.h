@@ -64,6 +64,12 @@ struct HorovodGlobalState {
   // TODO do we need this?
   std::atomic_int finished_parallel_reductions;
 
+  // Encapsulates the temp buffers used for msallreduce.
+  std::queue<FusionBufferManager> temp_buffers;
+
+  // Mutex to be used when accessing the queue of temp buffers
+  std::mutex buffer_lock;
+
   HorovodGlobalState(bool multi_threaded = false) {
     if (multi_threaded == true){
       auto horovod_number_of_threads = std::getenv(HOROVOD_NUMBER_OF_MPI_THREADS);
@@ -72,8 +78,12 @@ struct HorovodGlobalState {
         if (num_threads < 1){
            throw std::logic_error("Number of threads must be greater or equal to 1.");
         }
-        //Making this static so that this pool is preverved throughout the lifetime of the program
+        // Making this static so that this pool is preserved throughout the lifetime of the program
         static boost::asio::thread_pool pool(num_threads);
+        // Create a buffer manager for temp buffers for each thread
+        for (int i = 0; i < num_threads; ++i) {
+          temp_buffers.emplace();
+        }
         background_thread_pool = &pool;
         multithread_enabled = true;
       }
@@ -117,7 +127,7 @@ struct HorovodGlobalState {
 
   // Encapsulates the fusion buffers, handles resizing and auto-tuning of buffer size.
   FusionBufferManager fusion_buffer;
-
+  
   // Time point when last cycle started.
   std::chrono::steady_clock::time_point last_cycle_start;
 
