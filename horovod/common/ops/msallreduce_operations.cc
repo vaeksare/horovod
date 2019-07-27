@@ -52,18 +52,20 @@ Status MsAllreduceOp::Execute(std::vector<TensorTableEntry>& entries, const Resp
 }
 
 void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorTableEntry& entry, const Response& response, int layerid){
-    void* buffer_data;
-    int buffer_len;
-    void* recv_buffer;
+  void* buffer_data;
+  int buffer_len;
+  void* recv_buffer;
 
-    buffer_data = (void*) entry.tensor->data();
+  buffer_data = (void*) entry.tensor->data();
 
-    buffer_len = entry.output->size();
+  buffer_len = entry.output->size();
 
+  FusionBufferManager buffer_manager;
+  if(entry.tensor->data() == entry.output->data()) {
     // Get the temp buffer to be used for the Op
     global_state_->buffer_lock.lock();
     assert(!global_state_->temp_buffers.empty());
-    auto& buffer_manager = global_state_->temp_buffers.front();
+    buffer_manager = global_state_->temp_buffers.front();
     global_state_->temp_buffers.pop();
     global_state_->buffer_lock.unlock();
 
@@ -77,12 +79,16 @@ void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorT
         [](int64_t& size, int64_t& threshold){return size >= threshold;});
 
     if (!status.ok()) {
-        return_status[layerid] = status;
+        throw std::logic_error("MsAllreduceOp::Execute_helper: Initialize buffer failed.");
         return;
     }
 
     auto& buffer = buffer_manager.GetBuffer(entry.device, entry.context->framework(), global_state_->current_nccl_stream);
     recv_buffer = const_cast<void*>(buffer->AccessData(entry.context));
+  }
+  else {
+    recv_buffer = (void*) entry.output->data();
+  }
     LOG(INFO, global_state_->rank)<<"Begin to process tensor with size "<<entry.tensor->size()<<" into output buffer with size "<<entry.output->size();
     switch (entry.output->dtype()) {
         case HOROVOD_INT8:
@@ -159,18 +165,17 @@ void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorT
                             1);
         break;
         default:
-        return_status[layerid] = Status::InvalidArgument("Unsupported msallreduce type");
+          throw std::logic_error("MsAllreduceOp::Execute_helper: UNsupported data type.");
     }
-    
+  if(entry.tensor->data() == entry.output->data()) {
     // Return the buffer back into the pool of available buffers
     global_state_->buffer_lock.lock();
     global_state_->temp_buffers.push(buffer_manager);
     global_state_->buffer_lock.unlock();
-
-    std::memcpy((void*)entry.output->data(), buffer_data,
+  }
+  std::memcpy((void*)entry.output->data(), buffer_data,
                 (size_t)entry.tensor->size());
 
-  return_status[layerid] = Status::OK();
   LOG(INFO, global_state_->rank)<<"Finished ms allreduction, exiting operation";
 }
 
