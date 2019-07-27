@@ -216,14 +216,14 @@ void MsAllreduceOp::MsAllreduce_Internal(T* gradient_buffer, T* result_buffer, i
 
         if ((redn_rank & level) == 0) {
             // recv buffer from neighbor
-            LOG(INFO, global_state_->rank)<<"Reduction: receiving from neighbor";
+            LOG(INFO, global_state_->rank)<<std::this_thread::get_id()<<" Reduction: receiving from neighbor";
             PointToPointRecv(result_buffer, buffer_length, neighbor_true_rank, message_tag, communicator);
 
             PairwiseReduce_Internal<T, T>(gradient_buffer, result_buffer, (int) buffer_length, layer_sizes, num_layers);
         }
         else {
             // send gradient_buffer to neighbor
-            LOG(INFO, global_state_->rank)<<"Reduction: sending to neighbor";
+            LOG(INFO, global_state_->rank)<<std::this_thread::get_id()<<" Reduction: sending to neighbor";
             PointToPointSend(gradient_buffer, buffer_length, neighbor_true_rank, message_tag, communicator);
         }
     }
@@ -250,22 +250,23 @@ void MsAllreduceOp::MsAllreduce_Internal(T* gradient_buffer, T* result_buffer, i
         if ((redn_rank & level) == 0) {
             // send gradient_buffer to neighbor
             // and dont wait for the send to finish
-            LOG(INFO, global_state_->rank)<<"Reverse bcasting: sending to neighbor";
+            LOG(INFO, global_state_->rank)<<std::this_thread::get_id()<<" Reverse bcasting: sending to neighbor";
             PointToPointSend(gradient_buffer, buffer_length, neighbor_true_rank, message_tag, communicator);
         }
         else {
             // recv gradient_buffer from 
-            LOG(INFO, global_state_->rank)<<"Reverse bcasting: Receiving from neighbor";
+            LOG(INFO, global_state_->rank)<<std::this_thread::get_id()<<" Reverse bcasting: Receiving from neighbor";
             PointToPointRecv(gradient_buffer, buffer_length, neighbor_true_rank, message_tag, communicator);
         }
     }
+    LOG(INFO, global_state_->rank)<<std::this_thread::get_id()<<" Exiting msallreduction_internal.";
 }
 template<typename T, typename TACC>
 void MsAllreduceOp::PairwiseReduce_Internal(T* left_tensor, T* right_tensor, int buffer_length, int* layer_sizes, int num_layers){
     LOG(INFO, global_state_->rank)<<"Starting pairwise reduction internal";
     //TODO make this multi-threaded
-    //int nt = omp_get_max_threads();
-    int nt = 1;
+    int nt = omp_get_max_threads();
+    //int nt = 1;
     
     // Get number of elements
     int count = buffer_length/sizeof(T);
@@ -342,7 +343,6 @@ void MsAllreduceOp::PairwiseReduce_Internal(T* left_tensor, T* right_tensor, int
             TAXPY(end - begin, coeff, &right_tensor[begin], &left_tensor[begin]);
         }
     }
-    LOG(INFO, global_state_->rank)<<"Returning from pairwise reduction.";
 }
 
 template<typename T, typename TACC>
