@@ -63,7 +63,7 @@ void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorT
     buffer_len = entry.output->size();
 
     // Need a separate temp buffer if the Op is inplace
-    if (entry.output == entry.tensor) {
+    if (entry.output->data() == entry.tensor->data()) {
         // Get the temp buffer to be used for the Op
         global_state_->buffer_lock.lock();
         assert(!global_state_->temp_buffers.empty());
@@ -82,11 +82,10 @@ void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorT
             [](int64_t& size, int64_t& threshold){return size >= threshold;});
 
         if (!status.ok()) {
-            return_status[layerid] = status;
             global_state_->buffer_lock.lock();
             global_state_->temp_buffers.push(buffer_manager);
             global_state_->buffer_lock.unlock();
-            return;
+            throw std::logic_error("MsAllreduceOp::Execute_helper: Initialize buffer failed.");
         }
 
         auto& buffer = buffer_manager.GetBuffer(entry.device, entry.context->framework(), global_state_->current_nccl_stream);
@@ -171,7 +170,7 @@ void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorT
                             1);
         break;
         default:
-        return_status[layerid] = Status::InvalidArgument("Unsupported msallreduce type");
+        throw std::logic_error("MsAllreduceOp::Execute_helper: UNsupported data type.");
     }
     
     // Return the buffer back into the pool of available buffers if we used it
