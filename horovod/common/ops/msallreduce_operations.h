@@ -47,7 +47,7 @@ protected:
   void MsAllreduce_Internal(T* gradient_buffer, T* result_buffer, int64_t buffer_length, Communicator communicator, int message_tag, int* layer_sizes, int num_layers);
   
   template<typename T, typename TACC>
-  void PairwiseReduce_Internal(T* left_tensor, T* right_tensor, int cobuffer_lengthunt, int* layer_sizes, int num_layers);
+  void PairwiseReduce_Internal(T* left_tensor, T* right_tensor, int buffer_length, int* layer_sizes, int num_layers);
 
   template<typename T, typename TACC>
   void ComputeDotAndNormSqrd(const T* __restrict__ a, const T* __restrict__ b, int n, TACC& dotProduct, TACC& normsq);
@@ -55,6 +55,20 @@ protected:
   template<typename T, typename TACC>
   void TAXPY(int n, TACC a, T* __restrict__ x, T* __restrict__ y);
 
+  // TODO new parasail begin
+  template<typename T>
+  void SyncAllreduce(T* grad_buffer, T* recv_buffer, int count, Communicator common_com, MPI_Comm* reduction_comms, int message_tag);
+
+  template<typename T>
+  void ScaledAdd(int n, double acoeff, T* __restrict__ a, double bcoeff, T* __restrict__ b);
+  
+  template<typename T>
+  void PairwiseReduceWithComm(T* a, T* b, int count, int message_tag, MPI_Comm& comm, bool isLeftNeighbor);
+
+  template<typename T>
+  void ComputeDotAndNormSqrds(const T* __restrict__  a, const T* __restrict__ b, int n, double& dotProduct, double& anormsq, double& bnormsq);  
+   // TODO new parasail end
+ 
   void Execute_helper(std::map<int, Status>& return_status, TensorTableEntry& entry, const Response& response, int layerid);
 };
 

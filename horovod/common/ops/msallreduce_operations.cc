@@ -44,7 +44,7 @@ Status MsAllreduceOp::Execute(std::vector<TensorTableEntry>& entries, const Resp
     layerid++;
   }
   while (global_state_->finished_parallel_reductions < num_reductions) {
-    std::this_thread::sleep_for(std::chrono::microseconds(50));
+    std::this_thread::sleep_for(std::chrono::nanoseconds(50));
   }
   global_state_->finished_parallel_reductions = 0;
 
@@ -89,84 +89,148 @@ void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorT
   else {
     recv_buffer = (void*) entry.output->data();
   }
-    LOG(INFO, global_state_->rank)<<"Begin to process tensor with size "<<entry.tensor->size()<<" into output buffer with size "<<entry.output->size();
-    switch (entry.output->dtype()) {
-        case HOROVOD_INT8:
-        
-        MsAllreduce_Internal((int8_t*) buffer_data,
-                            (int8_t*) recv_buffer,
-                            buffer_len,
-                            Communicator::GLOBAL,
-                            layerid,
-                            &buffer_len,
-                            1);
-        break;     
-        case HOROVOD_UINT8:
-        MsAllreduce_Internal((uint8_t*) buffer_data,
-                            (uint8_t*) recv_buffer,
-                            buffer_len,
-                            Communicator::GLOBAL,
-                            layerid,
-                            &buffer_len,
-                            1);
-        break;
-        case HOROVOD_UINT16:
-        MsAllreduce_Internal((uint16_t*) buffer_data,
-                            (uint16_t*) recv_buffer,
-                            buffer_len,
-                            Communicator::GLOBAL,
-                            layerid,
-                            &buffer_len,
-                            1);
-        break;
-        case HOROVOD_INT16:
-        MsAllreduce_Internal((int16_t*) buffer_data,
-                            (int16_t*) recv_buffer,
-                            buffer_len,
-                            Communicator::GLOBAL,
-                            layerid,
-                            &buffer_len,
-                            1);
-        break;
-        case HOROVOD_INT32:
-        MsAllreduce_Internal((int32_t*) buffer_data,
-                            (int32_t*) recv_buffer,
-                            buffer_len,
-                            Communicator::GLOBAL,
-                            layerid,
-                            &buffer_len,
-                            1);
-        break;
-        case HOROVOD_INT64:
-        MsAllreduce_Internal((int64_t*) buffer_data,
-                            (int64_t*) recv_buffer,
-                            buffer_len,
-                            Communicator::GLOBAL,
-                            layerid,
-                            &buffer_len,
-                            1);
-        break;
-        case HOROVOD_FLOAT32:
-        MsAllreduce_Internal((float*) buffer_data,
-                            (float*) recv_buffer,
-                            buffer_len,
-                            Communicator::GLOBAL,
-                            layerid,
-                            &buffer_len,
-                            1);
-        break;
-        case HOROVOD_FLOAT64:
-        MsAllreduce_Internal((double*) buffer_data,
-                            (double*) recv_buffer,
-                            buffer_len,
-                            Communicator::GLOBAL,
-                            layerid,
-                            &buffer_len,
-                            1);
-        break;
-        default:
-          throw std::logic_error("MsAllreduceOp::Execute_helper: UNsupported data type.");
-    }
+  LOG(INFO, global_state_->rank)<<"Begin to process tensor with size "<<entry.tensor->size()<<" into output buffer with size "<<entry.output->size();
+  switch (entry.output->dtype()) {
+    case HOROVOD_INT8:
+      //TODO new parasail
+    SyncAllreduce((int8_t*) buffer_data,
+                    (int8_t*) recv_buffer,
+                    buffer_len,
+                    Communicator::GLOBAL,
+                    global_state_->reduction_comms,
+                    layerid);  
+    // TODO old parasail 
+    // MsAllreduce_Internal((int8_t*) buffer_data,
+    //                     (int8_t*) recv_buffer,
+    //                     buffer_len,
+    //                     Communicator::GLOBAL,
+    //                     layerid,
+    //                     &buffer_len,
+    //                     1);
+    break;     
+    case HOROVOD_UINT8:
+    //TODO new parasail
+    SyncAllreduce((uint8_t*) buffer_data,
+                    (uint8_t*) recv_buffer,
+                    buffer_len,
+                    Communicator::GLOBAL,
+                    global_state_->reduction_comms,
+                    layerid);  
+    // TODO old parasail
+    // MsAllreduce_Internal((uint8_t*) buffer_data,
+    //                     (uint8_t*) recv_buffer,
+    //                     buffer_len,
+    //                     Communicator::GLOBAL,
+    //                     layerid,
+    //                     &buffer_len,
+    //                     1);
+    break;
+    case HOROVOD_UINT16:
+    //TODO new parasail
+    SyncAllreduce((uint16_t*) buffer_data,
+                    (uint16_t*) recv_buffer,
+                    buffer_len,
+                    Communicator::GLOBAL,
+                    global_state_->reduction_comms,
+                    layerid);  
+    // TODO old parasail
+    // MsAllreduce_Internal((uint16_t*) buffer_data,
+    //                     (uint16_t*) recv_buffer,
+    //                     buffer_len,
+    //                     Communicator::GLOBAL,
+    //                     layerid,
+    //                     &buffer_len,
+    //                     1);
+    break;
+    case HOROVOD_INT16:
+    //TODO new parasail
+    SyncAllreduce((int16_t*) buffer_data,
+                    (int16_t*) recv_buffer,
+                    buffer_len,
+                    Communicator::GLOBAL,
+                    global_state_->reduction_comms,
+                    layerid);  
+    // TODO old parasail
+    // MsAllreduce_Internal((int16_t*) buffer_data,
+    //                     (int16_t*) recv_buffer,
+    //                     buffer_len,
+    //                     Communicator::GLOBAL,
+    //                     layerid,
+    //                     &buffer_len,
+    //                     1);
+    break;
+    case HOROVOD_INT32:
+    //TODO new parasail
+    SyncAllreduce((int32_t*) buffer_data,
+                    (int32_t*) recv_buffer,
+                    buffer_len,
+                    Communicator::GLOBAL,
+                    global_state_->reduction_comms,
+                    layerid);  
+    // TODO old parasail
+    // MsAllreduce_Internal((int32_t*) buffer_data,
+    //                     (int32_t*) recv_buffer,
+    //                     buffer_len,
+    //                     Communicator::GLOBAL,
+    //                     layerid,
+    //                     &buffer_len,
+    //                     1);
+    break;
+    case HOROVOD_INT64:
+    //TODO new parasail
+    SyncAllreduce((int64_t*) buffer_data,
+                    (int64_t*) recv_buffer,
+                    buffer_len,
+                    Communicator::GLOBAL,
+                    global_state_->reduction_comms,
+                    layerid);
+    // TODO old parasail
+    // MsAllreduce_Internal((int64_t*) buffer_data,
+    //                     (int64_t*) recv_buffer,
+    //                     buffer_len,
+    //                     Communicator::GLOBAL,
+    //                     layerid,
+    //                     &buffer_len,
+    //                     1);
+    break;
+    case HOROVOD_FLOAT32:
+    //TODO new parasail
+    SyncAllreduce((float*) buffer_data,
+                    (float*) recv_buffer,
+                    buffer_len,
+                    Communicator::GLOBAL,
+                    global_state_->reduction_comms,
+                    layerid);
+    // TODO old parasail
+    // MsAllreduce_Internal((float*) buffer_data,
+    //                     (float*) recv_buffer,
+    //                     buffer_len,
+    //                     Communicator::GLOBAL,
+    //                     layerid,
+    //                     &buffer_len,
+    //                     1);
+    break;
+    case HOROVOD_FLOAT64:
+    //TODO new parasail
+    SyncAllreduce((double*) buffer_data,
+                    (double*) recv_buffer,
+                    buffer_len,
+                    Communicator::GLOBAL,
+                    global_state_->reduction_comms,
+                    layerid);
+    
+    // TODO old parasail
+    // MsAllreduce_Internal((double*) buffer_data,
+    //                     (double*) recv_buffer,
+    //                     buffer_len,
+    //                     Communicator::GLOBAL,
+    //                     layerid,
+    //                     &buffer_len,
+    //                     1);
+    break;
+    default:
+        throw std::logic_error("MsAllreduceOp::Execute_helper: UNsupported data type.");
+  }
   if(entry.tensor->data() == entry.output->data()) {
     // Return the buffer back into the pool of available buffers
     global_state_->buffer_lock.lock();
@@ -184,6 +248,204 @@ bool MsAllreduceOp::Enabled(const ParameterManager& param_manager,
                            const Response& response) const {
   return true;
 }
+
+// TODO new parasail algo begin
+template<typename T>
+void MsAllreduceOp::ComputeDotAndNormSqrds(const T* __restrict__  a, const T* __restrict__ b, int n, double& dotProduct, double& anormsq, double& bnormsq) {
+    dotProduct = 0.;
+    anormsq = 0.;
+    bnormsq = 0.;
+
+    for (int i = 0; i < n; i++) {
+        dotProduct += a[i] * b[i];
+        anormsq += a[i] * a[i];
+        bnormsq += b[i] * b[i];
+    }
+}
+
+template<typename T>
+void MsAllreduceOp::ScaledAdd(int n, double acoeff, T* __restrict__ a, double bcoeff, T* __restrict__ b) {
+    for (int i = 0; i < n; i++) {
+        a[i] = acoeff * a[i] + bcoeff * b[i];
+    }
+}
+
+template<typename T>
+void MsAllreduceOp::PairwiseReduceWithComm(T* a, T* b, int count, int message_tag, MPI_Comm& comm, bool isLeftNeighbor) {
+    double dotProduct = 0.f;
+    double anormsq = 0.f;
+    double bnormsq = 0.f;
+    ComputeDotAndNormSqrds(a, b, count, dotProduct, anormsq, bnormsq);
+
+    double reduce_vals[3];
+    double recv_reduce_vals[3];
+            if (isLeftNeighbor) { 
+                reduce_vals[0] = anormsq;
+                reduce_vals[1] = bnormsq;
+            } else {
+                reduce_vals[1] = anormsq;
+                reduce_vals[0] = bnormsq;
+            }
+    reduce_vals[2] = dotProduct;
+
+    MPI_Allreduce(MPI_IN_PLACE, reduce_vals, 3, MPI_DOUBLE, MPI_SUM, comm);
+
+            if (isLeftNeighbor) { 
+                anormsq = reduce_vals[0];
+                bnormsq = reduce_vals[1];
+            } else {
+                anormsq = reduce_vals[1];
+                bnormsq = reduce_vals[0];
+            }
+    dotProduct = reduce_vals[2];
+
+    double acoeff = 1;
+    double bcoeff = 1;
+    if (anormsq != 0)
+        acoeff = 1.0 - dotProduct / anormsq * 0.5;
+    if (bnormsq != 0)
+        bcoeff = 1.0 - dotProduct / bnormsq * 0.5;
+
+    // a = acoeff * a + bcoeff * b
+    ScaledAdd(count, acoeff, a, bcoeff, b);
+}
+
+template<typename T>
+void MsAllreduceOp::SyncAllreduce(T* grad_buffer, T* recv_buffer, int count, Communicator common_comm, MPI_Comm* reduction_comms, int message_tag) {
+    int rank;
+    int size;
+    MPI_Comm communicator = mpi_context_->GetMPICommunicator(common_comm);
+    MPI_Comm_rank(communicator, &rank);
+    MPI_Comm_size(communicator, &size);
+    count = count / sizeof(T);
+    //MPI_Allreduce((float*) grad_buffer, (float*) recv_buffer, count/2, MPI_FLOAT, MPI_SUM, communicator);
+    //return;
+
+            int chunk_size = (1<<15);
+            int nearest_power_2 = 1;
+            for (nearest_power_2 = 1; (nearest_power_2<<1) <= size; nearest_power_2 = (nearest_power_2 << 1)){}
+            int remaining_non_power_2 = size - nearest_power_2;
+            int level;
+            if (rank >= size - 2 * remaining_non_power_2){
+                int myCount;
+                int nghrCount;
+                level = 0;
+                int neighbor_rank;
+                int sendOffset;
+                int recvOffset;
+                if (rank < nearest_power_2){
+                    neighbor_rank = rank + remaining_non_power_2;
+                    myCount = (count >> 1);
+                    nghrCount = count - myCount;
+                    sendOffset = myCount;
+                    recvOffset = 0;
+                } else {
+                    nghrCount = (count >> 1);
+                    myCount = count - nghrCount;
+                    neighbor_rank = rank - remaining_non_power_2;
+                    sendOffset = 0;
+                    recvOffset = nghrCount;
+                }
+                for (int i = 0; i < std::max(nghrCount, myCount); i += chunk_size) {
+                    MPI_Sendrecv((char*)(&grad_buffer[i+sendOffset]), std::min(chunk_size, nghrCount-i)*sizeof(T)/sizeof(char), MPI_CHAR, neighbor_rank, level * 1000 + message_tag, (char*)(&recv_buffer[i+recvOffset]), std::min(chunk_size, myCount-i)*sizeof(T)/sizeof(char), MPI_CHAR, neighbor_rank, level * 1000 + message_tag, communicator, MPI_STATUS_IGNORE);
+                }
+                ScaledAdd(myCount, 1.0, &grad_buffer[recvOffset] , 1.0, &recv_buffer[recvOffset]);
+        
+                if (rank < nearest_power_2) {
+                    for (int i = 0; i < nghrCount; i += chunk_size) {
+                        MPI_Recv((char*)(&grad_buffer[i+sendOffset]), std::min(chunk_size, nghrCount-i)*sizeof(T)/sizeof(char), MPI_CHAR, neighbor_rank, level * 1000 + message_tag, communicator, MPI_STATUS_IGNORE);
+                    }
+                } else {
+                    for (int i = 0; i < myCount; i += chunk_size)
+                        MPI_Send((char*)(&grad_buffer[i+recvOffset]), std::min(chunk_size, myCount-i)*sizeof(T)/sizeof(char), MPI_CHAR, neighbor_rank, level * 1000 + message_tag, communicator);
+                }
+            }
+
+            int orgSize = size;
+            size = nearest_power_2;
+            if (rank < nearest_power_2){
+                T* org_grad_buffer = grad_buffer;
+                T* org_recv_buffer = recv_buffer;
+                int myCount = count;
+                int comm_index;
+                for (level = 1, comm_index = 0; level < size; level = (level << 1), comm_index++){
+                    int neighbor_rank = rank ^ level;
+                    int nghrCount = 0;
+                    int sendOffset = 0;
+                    int recvOffset = 0;
+                    int firstHalfMyCount = (myCount >> 1);
+                    int secondHalfMyCount = myCount - firstHalfMyCount;
+                    if ((rank & level) != 0) {
+                        myCount = secondHalfMyCount;
+                        nghrCount = firstHalfMyCount;
+                        sendOffset = 0;
+                        recvOffset = nghrCount;
+                    } else {
+                        myCount = firstHalfMyCount;
+                        nghrCount = secondHalfMyCount;
+                        sendOffset = myCount;
+                        recvOffset = 0;
+                    }
+                    for (int i = 0; i < std::max(myCount,nghrCount); i += chunk_size)
+                        MPI_Sendrecv((char*)(&grad_buffer[i+sendOffset]), std::min(chunk_size, nghrCount-i)*sizeof(T)/sizeof(char), MPI_CHAR, neighbor_rank, level * 1000 + message_tag, (char*)(&recv_buffer[i+recvOffset]), std::min(chunk_size, myCount-i)*sizeof(T)/sizeof(char), MPI_CHAR, neighbor_rank, level * 1000 + message_tag, communicator, MPI_STATUS_IGNORE);
+                    if ((rank & level) != 0) {
+                        grad_buffer = &grad_buffer[nghrCount];
+                        recv_buffer = &recv_buffer[nghrCount];
+                    }
+                    if (level == 1) {
+                        ScaledAdd(myCount, 0.5, grad_buffer , 0.5, recv_buffer);
+                    } else {
+                        LOG(INFO,global_state_->rank)<<"comm_index is"<<comm_index;
+                        PairwiseReduceWithComm(grad_buffer, recv_buffer, myCount, message_tag, reduction_comms[comm_index], (rank & level) == 0);
+        }
+                }
+
+                for (level = (size >> 1); level > 0; level = (level >> 1)) {
+                    int neighbor_rank = rank ^ level;
+                    int nghrCount = myCount;
+                    int levelNP = (level << 1);
+                    int levelSizeDeterminer = levelNP - 1;
+                    int countRemainer = (count & levelSizeDeterminer);
+                    int myLevelRank = (rank & levelSizeDeterminer);
+                    int nghrLevelRank = (neighbor_rank & levelSizeDeterminer);
+                    if ((myLevelRank >= (levelNP - countRemainer)) && (nghrLevelRank < (levelNP - countRemainer))){
+                        nghrCount -= 1;
+                    } else if ((myLevelRank < (levelNP - countRemainer)) && (nghrLevelRank >= (levelNP - countRemainer))){
+                        nghrCount += 1;
+                    }
+
+                    if ((rank & level) == 0) {
+                        recv_buffer = &grad_buffer[myCount];
+                    } else {
+                        recv_buffer = &grad_buffer[-nghrCount];
+                    }
+                    for (int i = 0; i < std::max(myCount,nghrCount); i += chunk_size)
+                        MPI_Sendrecv((char*)(&grad_buffer[i]), std::min(chunk_size, myCount-i)*sizeof(T)/sizeof(char), MPI_CHAR, neighbor_rank, level * 1000 + message_tag, (char*)(&recv_buffer[i]), std::min(chunk_size, nghrCount-i)*sizeof(T)/sizeof(char), MPI_CHAR, neighbor_rank, level * 1000 + message_tag, communicator, MPI_STATUS_IGNORE);
+                    if ((rank & level) != 0) {
+                        grad_buffer = &grad_buffer[-nghrCount];
+                    }
+                    myCount += nghrCount;
+                }
+            }
+            size = orgSize;
+
+            if (rank >= size - 2 * remaining_non_power_2){
+                level = 0;
+                int neighbor_rank;
+                if (rank < nearest_power_2) {
+                    neighbor_rank = rank + remaining_non_power_2;
+                    for (int i = 0; i < count; i += chunk_size) {
+                        MPI_Send((char*)(&grad_buffer[i]), std::min(chunk_size, count-i)*sizeof(T)/sizeof(char), MPI_CHAR, neighbor_rank, level * 1000 + message_tag, communicator);
+                    }
+                } else {
+                    neighbor_rank = rank - remaining_non_power_2;
+                    for (int i = 0; i < count; i += chunk_size)
+                        MPI_Recv((char*)(&grad_buffer[i]), std::min(chunk_size, count-i)*sizeof(T)/sizeof(char), MPI_CHAR, neighbor_rank, level * 1000 + message_tag, communicator, MPI_STATUS_IGNORE);
+                }
+            }
+
+}
+// TODO new parasail algo end
 
 template<typename T>
 void MsAllreduceOp::MsAllreduce_Internal(T* gradient_buffer, T* result_buffer, int64_t buffer_length, Communicator communicator, int message_tag, int* layer_sizes, int num_layers){

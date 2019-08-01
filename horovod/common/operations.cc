@@ -1017,8 +1017,64 @@ void BackgroundThreadLoop(HorovodGlobalState& state, MPIContext& ctx) {
 #endif
     state.should_finalize = true;
   }
+    // parasail new algo begin
+    // TODO put this in a better place
+    MPI_Comm dup_world;
+    MPI_Comm_dup(MPI_COMM_WORLD, &(dup_world));
+    int para_rank, para_size;
+    LOG(INFO,state.rank)<<"first MPI_Comm_rank.";
+  	MPI_Comm_rank(dup_world, &para_rank);
+  	MPI_Comm_size(dup_world, &para_size);
+    MPI_Group world_group;
+	  MPI_Comm_group(dup_world, &world_group);
+
+    int* node_rank = new int[para_size/4];
+    for (int i = 0; i < para_size/4; i++){
+        node_rank[i] = i*4;
+    }
+		MPI_Group node_group;
+		MPI_Group_incl(world_group, para_size/4, node_rank, &node_group);
+
+		MPI_Comm_create_group(dup_world, node_group, 0, &state.node_comm);
+		MPI_Group_free(&node_group);
+    LOG(INFO,state.rank)<<"FIrst group free of node_group "<<state.node_comm;
+
+    // change the para_rank and para_size for head comm
+		if ((para_rank & 3) == 0){
+			MPI_Comm_rank(state.node_comm, &para_rank);
+			MPI_Comm_size(state.node_comm, &para_size);
+			MPI_Comm_group(state.node_comm, &node_group);
+			int nearest_power_2 = 1;
+      int log_size;
+			for (nearest_power_2 = 1, log_size = 0; (nearest_power_2<<1) <= para_size; nearest_power_2 = (nearest_power_2 << 1), log_size++){}
+			int shift_val;
+      int level;
+      LOG(INFO,state.rank)<<"log size is "<<log_size;
+      state.reduction_comms = new MPI_Comm[log_size];
+			for (level = 1, shift_val = 1; level < nearest_power_2; level = (level << 1), shift_val++){
+				int base_rank = ((para_rank >> shift_val) << shift_val);
+				for (int i = 0; i < (level << 1); i++){
+					node_rank[i] = base_rank + i;
+				}
+				MPI_Group red_group;
+				MPI_Group_incl(node_group, (level << 1), node_rank, &red_group);
+				MPI_Comm_create_group(state.node_comm, red_group, 0, &state.reduction_comms[shift_val-1]);
+        //MPI_Group_free(&red_group);
+        LOG(INFO,state.rank)<<"second group free of red_group";
+			}
+		}
+		//MPI_Group_free(&node_group);
+    LOG(INFO,state.rank)<<"third group free of node_group";
+
+		//MPI_Group_free(&world_group);
+    LOG(INFO,state.rank)<<"forth group free of world_group";
+
+
+    delete[] node_rank;  
+  // TODO parasail new algo end
 
   if (state.ranks.size() > 0) {
+
     MPI_Group world_group;
     MPI_Comm_group(MPI_COMM_WORLD, &world_group);
     MPI_Group work_group;
@@ -1125,7 +1181,7 @@ void BackgroundThreadLoop(HorovodGlobalState& state, MPIContext& ctx) {
   if (horovod_timeline != nullptr) {
     state.timeline_enabled = true;
   }
-
+    
   set_bool_from_env(HOROVOD_TIMELINE_MARK_CYCLES, state.mark_cycles_in_timeline,
                     true);
 

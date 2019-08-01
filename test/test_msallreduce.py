@@ -51,24 +51,28 @@ class MPITests(tf.test.TestCase):
         size = hvd.size()
         base_dim = [16,32,64]
         dim_multipliers = [1, 4, 8, 16, 32, 64]
-        for multiplier in dim_multipliers:
-            true_dim = base_dim.copy()
-            true_dim[2] = true_dim[2] * multiplier
-            start_time = datetime.utcnow()
-            with tf.device("/cpu:0"):
-                tf.set_random_seed(1234)
-                tensor = tf.random_uniform(
-                        true_dim, -100, 100, dtype=tf.float32)
-                for _ in range(50):
-                    for _ in range(20):
-                        summed = []
-                        summed.append(hvd.allreduce(tensor, average=False))
-                    result_sum = self.evaluate(summed)
-                    #print(result_sum)
-            end_time = datetime.utcnow()
-            time_delta = end_time - start_time
-            tensor_size = np.prod(true_dim) / 256
-            print("20 {}K tensors Cycle took {}".format(tensor_size,time_delta.total_seconds()))
+        #for multiplier in dim_multipliers:
+        multiplier = dim_multipliers[5]
+        true_dim = base_dim.copy()
+        true_dim[2] = true_dim[2] * multiplier
+        start_time = datetime.utcnow()
+        rep = 1
+        tensor_count = 100
+        with tf.device("/cpu:0"):
+            tf.set_random_seed(1234)
+            
+            for _ in range(rep):
+                summed = []
+                for _ in range(tensor_count):
+                    tensor = tf.random_uniform(
+                    true_dim, -100, 100, dtype=tf.float32)
+                    summed.append(hvd.allreduce(tensor, average=False))
+                result_sum = self.evaluate(summed)
+                #print(result_sum)
+        end_time = datetime.utcnow()
+        time_delta = end_time - start_time
+        tensor_size = np.prod(true_dim) / 256
+        print("{} {}K tensors {} Cycles took {}".format(tensor_count, tensor_size, rep, time_delta.total_seconds()))
 
     def test_horovod_single_large_tensor_allreduce_cpu(self):
         """Test on CPU that the allreduce correctly sums 1D, 2D, 3D tensors."""
@@ -76,20 +80,21 @@ class MPITests(tf.test.TestCase):
         size = hvd.size()
         base_dim = [16,32,64]
         dim_multipliers = [1, 4, 8, 16, 32, 64]
-        for multiplier in dim_multipliers:
-            true_dim = base_dim.copy()
-            true_dim[2] = true_dim[2] * multiplier
+        #for multiplier in dim_multipliers:
+        multiplier = dim_multipliers[5]
+        true_dim = base_dim.copy()
+        true_dim[2] = true_dim[2] * multiplier
+        with tf.device("/cpu:0"):
+            tf.set_random_seed(1234)
+            tensor = tf.random_uniform(
+                    true_dim, -100, 100, dtype=tf.float32)
             start_time = datetime.utcnow()
-            with tf.device("/cpu:0"):
-                tf.set_random_seed(1234)
-                tensor = tf.random_uniform(
-                        true_dim, -100, 100, dtype=tf.float32)
-                
-                for _ in range(100):
-                    summed = 0
-                    summed = hvd.allreduce(tensor, average=False)
-                    result_sum = self.evaluate(summed)
-                    #print(result_sum)
+           
+            for _ in range(100):
+                summed = 0
+                summed = hvd.allreduce(tensor, average=False)
+                result_sum = self.evaluate(summed)
+                #print(result_sum)
             end_time = datetime.utcnow()
             time_delta = end_time - start_time
             tensor_size = np.prod(true_dim) / 256

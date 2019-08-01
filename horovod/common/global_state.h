@@ -27,6 +27,7 @@
 #include "response_cache.h"
 #include "timeline.h"
 #include "logging.h"
+#include "mpi.h"
 
 namespace horovod {
 namespace common {
@@ -100,6 +101,13 @@ struct HorovodGlobalState {
   
   // Background thread running MPI communication.
   std::thread background_thread;
+
+  // MPI communicators used to do msallreduction
+  // TODO put this in a better place
+  MPI_Comm* reduction_comms;
+  
+  // TODO not needed
+  MPI_Comm node_comm;
 
   // Whether the background thread should shutdown.
   std::atomic_bool shut_down {false};
@@ -206,6 +214,8 @@ struct HorovodGlobalState {
     if(background_thread_pool != nullptr){
       background_thread_pool->stop();
     }
+
+    delete reduction_comms;
   }
 };
 
