@@ -19,6 +19,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
 
 from horovod.common.util import check_extension
 
@@ -77,8 +78,13 @@ def allreduce(tensor, average=True, device_dense='', device_sparse='',
             tensor_compressed, ctx = compression.compress(tensor)
             summed_tensor_compressed = _allreduce(tensor_compressed)
             summed_tensor = compression.decompress(summed_tensor_compressed, ctx)
+            #TODO fix this
+            msallreduce_enable = os.environ['HOROVOD_MSALLREDUCE_ENABLE']
+            use_msallreduce = True if msallreduce_enable is not None and msallreduce_enable == '1' else False
+            num_threads = os.environ['HOROVOD_NUMBER_OF_MPI_THREADS']
+            has_threads = True if num_threads is not None and  int(num_threads) >=1 else False
             new_tensor = (tf.div(summed_tensor, horovod_size)
-                          if average else summed_tensor)
+                          if average and not use_msallreduce and not has_threads else summed_tensor)
         return new_tensor
 
 
