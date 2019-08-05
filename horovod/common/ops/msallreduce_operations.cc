@@ -125,6 +125,7 @@ void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorT
     //                     &buffer_len,
     //                     1);
     break;
+    case HOROVOD_FLOAT16:
     case HOROVOD_UINT16:
     //TODO new parasail
     SyncAllreduce((uint16_t*) buffer_data,

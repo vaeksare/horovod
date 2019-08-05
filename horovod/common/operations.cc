@@ -555,11 +555,6 @@ ResponseList FuseResponses(std::deque<Response>& responses,
         response_list.add_response(first_response);
       }
     }
-    LOG(INFO, state.rank)<<"response list contains "<<response_list.responses().size();
-    int i = 0;
-    for(auto response : response_list.responses()) {
-      LOG(INFO, state.rank)<<"***response is: "<<response.tensor_names_string();
-    }
     // At the end of this loop, all allreduce responses should be taken out. Responses only contain non-allreduce responses.
     // It's safe to proceed to the response fusion.
 
@@ -1778,12 +1773,6 @@ bool RunLoopOnce(HorovodGlobalState& state, MPIContext& ctx,
 
   // Perform the collective operation. All nodes should end up performing
   // the same operation.
-
-    LOG(INFO, state.rank)<<"response list contains "<<response_list.responses().size();
-    for(auto response : response_list.responses()) {
-      LOG(INFO, state.rank)<<"***response is: "<<response.tensor_names_string();
-    }
-
   for (auto& response : response_list.responses()) {
     LOG(TRACE, state.rank) << "Performing " << response.tensor_names_string();
     LOG(DEBUG, state.rank) << "Processing " << response.tensor_names().size()
