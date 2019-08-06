@@ -106,8 +106,8 @@ struct HorovodGlobalState {
   // TODO put this in a better place
   MPI_Comm* reduction_comms;
   
-  // TODO not needed
-  MPI_Comm node_comm;
+  // TODO find a better place
+  MPI_Comm local_comm;
 
   // Whether the background thread should shutdown.
   std::atomic_bool shut_down {false};

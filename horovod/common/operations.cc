@@ -1012,33 +1012,53 @@ void BackgroundThreadLoop(HorovodGlobalState& state, MPIContext& ctx) {
 #endif
     state.should_finalize = true;
   }
+
   // parasail new algo begin
-  int para_rank, para_size;
-  MPI_Comm_rank(MPI_COMM_WORLD, &para_rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &para_size);
-  MPI_Group world_group;
-	MPI_Comm_group(MPI_COMM_WORLD, &world_group);
+  // TODO make this a condition and merge with horovod's hiearchical allreduce
+  if(state.multithread_enabled == true) {
+    MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &state.local_comm);
+    int ms_local_rank, ms_local_size;
+    MPI_Comm_size(state.local_comm, &ms_local_size);
+    MPI_Comm_rank(state.local_comm, &ms_local_rank);
+    if (ms_local_rank == 0)
+    {
+        int rank, size;
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+        MPI_Comm_size(MPI_COMM_WORLD, &size);
+        // converting to node-based rank and size
+        rank /= ms_local_size;
+        size /= ms_local_size;
 
-	int nearest_power_2 = 1;
-	int log_size;
-	for (nearest_power_2 = 1, log_size = 0; (nearest_power_2<<1) <= para_size; nearest_power_2 = (nearest_power_2 << 1), log_size++){}
-	int shift_val;
-	int level;
-	state.reduction_comms = new MPI_Comm[log_size];
-  int* node_rank = new int[para_size];
-	for (level = 1, shift_val = 1; level < nearest_power_2; level = (level << 1), shift_val++){
-		int base_rank = ((para_rank >> shift_val) << shift_val);
-		for (int i = 0; i < (level << 1); i++){
-			node_rank[i] = base_rank + i;
-		}
-		MPI_Group red_group;
-		MPI_Group_incl(world_group, (level << 1), node_rank, &red_group);
-		MPI_Comm_create_group(MPI_COMM_WORLD, red_group, 0, &state.reduction_comms[shift_val-1]);
-		MPI_Group_free(&red_group);
-	}
+        MPI_Group world_group;
+        MPI_Comm_group(MPI_COMM_WORLD, &world_group);
 
-  delete[] node_rank;
-  // TODO parasail new algo end
+        int nearest_power_2 = 1;
+        int log_size;
+        for (nearest_power_2 = 1, log_size = 0; (nearest_power_2 << 1) <= size; nearest_power_2 = (nearest_power_2 << 1), log_size++)
+        {
+        }
+        int shift_val;
+        int level;
+        state.reduction_comms = new MPI_Comm[log_size];
+        int *node_rank = new int[size];
+        for (level = 1, shift_val = 1; level < nearest_power_2; level = (level << 1), shift_val++)
+        {
+            int base_rank = ((rank >> shift_val) << shift_val);
+            for (int i = 0; i < (level << 1); i++)
+            {
+                // converting back to world rank
+                node_rank[i] = (base_rank + i) * ms_local_size;
+            }
+            MPI_Group red_group;
+            MPI_Group_incl(world_group, (level << 1), node_rank, &red_group);
+            MPI_Comm_create_group(MPI_COMM_WORLD, red_group, 0, &state.reduction_comms[shift_val - 1]);
+            MPI_Group_free(&red_group);
+        }
+
+        delete[] node_rank;
+    }  
+    // TODO parasail new algo end
+  }
 
   if (state.ranks.size() > 0) {
 
