@@ -21,6 +21,7 @@ from distutils.version import LooseVersion
 
 # Load all the necessary PyTorch C types.
 import torch
+import os
 
 # PyTorch v2 API starts with 1.0.0 (including nightly builds)
 _v2_api = LooseVersion(torch.__version__) >= LooseVersion('1.0.0')
@@ -71,6 +72,12 @@ def _allreduce_function_factory(tensor):
 
 
 def _allreduce_async(tensor, output, average, name):
+    msallreduce_enable = os.environ['HOROVOD_MSALLREDUCE_ENABLE']
+    use_msallreduce = True if msallreduce_enable is not None and msallreduce_enable == '1' else False
+    num_threads = os.environ['HOROVOD_NUMBER_OF_MPI_THREADS']
+    has_threads = True if num_threads is not None and  int(num_threads) >=1 else False
+    if use_msallreduce or has_threads:
+        average = False
     if tensor.dtype == torch.float16 and not _fp16_supported:
         raise NotImplementedError(
             'float16 allreduce is not supported for PyTorch version {} < 1.0.0'
