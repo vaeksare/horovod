@@ -105,6 +105,9 @@ struct HorovodGlobalState {
   // MPI communicators used to do msallreduction
   // TODO put this in a better place
   MPI_Comm* reduction_comms;
+
+  //TODO find a better place
+  int rank_log_size = 0;
   
   // TODO find a better place
   MPI_Comm local_comm;

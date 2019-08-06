@@ -1039,6 +1039,7 @@ void BackgroundThreadLoop(HorovodGlobalState& state, MPIContext& ctx) {
         }
         int shift_val;
         int level;
+        state.rank_log_size = log_size;
         state.reduction_comms = new MPI_Comm[log_size];
         int *node_rank = new int[size];
         for (level = 1, shift_val = 1; level < nearest_power_2; level = (level << 1), shift_val++)
