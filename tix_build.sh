@@ -1,5 +1,5 @@
 #!/bin/bash
-pip uninstall -y horovod
+pip3 uninstall -y horovod
 rm -r ./build
-python setup.py clean
-python setup.py install
+python3 setup.py clean
+HOROVOD_WITHOUT_PYTORCH=1 HOROVOD_WITHOUT_MXNET=1 HOROVOD_WITH_TENSORFLOW=1  python3 setup.py install

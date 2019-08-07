@@ -14,6 +14,23 @@ import horovod.tensorflow as hvd
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 
+def parasail_reference_operation(a,b):
+    assert a.size == b.size
+    assert a.size > 0 and b.size > 0
+    assert a.dtype == b.dtype
+    # parasail logic in numpy
+    anormsq = np.inner(a.ravel(), a.ravel())
+    bnormsq = np.inner(b.ravel(), b.ravel())
+    dotProduct = np.dot(a.ravel(), b.ravel())
+    acoeff = 1.0
+    bcoeff = 1.0
+    if anormsq != 0:
+        acoeff = 1.0 - dotProduct / anormsq * 0.5
+    if bnormsq != 0:
+        bcoeff = 1.0 - dotProduct / bnormsq * 0.5
+    answer = acoeff * a + bcoeff * b
+    return answer
+
 class MPITests(tf.test.TestCase):
     """
     Tests for ops in horovod.tensorflow.
@@ -34,16 +51,29 @@ class MPITests(tf.test.TestCase):
         """Test on CPU that the allreduce correctly sums 1D, 2D, 3D tensors."""
         hvd.init()
         size = hvd.size()
-        with tf.device("/cpu:0"):
-            if hvd.rank() == 0:
-                tensors = [tf.constant([[1.0, 2.0], [3.0, 4.0]]),tf.constant([[9.0, 10.0], [11.0, 12.0]])]
-            else:
-                tensors = [tf.constant([[5.0, 6.0], [7.0, 8.0]]), tf.constant([[13.0, 14.0], [15.0, 16.0]])]
-            summed = 0
-            for tensor in tensors:
-                summed += hvd.allreduce(tensor, average=False)
-        diff = self.evaluate(summed)
-        print(diff)
+        
+        rank0_tensors = [np.asarray([[1.0, 2.0], [3.0, 4.0]]), np.asarray([[9.0, 10.0], [11.0, 12.0]])]
+        rank1_tensors = [np.asarray([[5.0, 6.0], [7.0, 8.0]]), np.asarray([[13.0, 14.0], [15.0, 16.0]])]
+
+        expected = []
+        for a,b in zip(rank0_tensors, rank1_tensors):
+            answer = parasail_reference_operation(a, b)
+            expected.append(answer)
+
+        for dtype in [tf.float16, tf.float32, tf.float64]:
+            with tf.device("/cpu:0"):
+                tensors = map(tf.constant, rank0_tensors if hvd.rank() == 0 else rank1_tensors)
+                # cast to the corresponding dtype
+                tensors = map(lambda tensor: tf.cast(tensor, dtype), tensors)
+                # and away we go: do reduction
+                reduced_tensors = [
+                    self.evaluate(hvd.allreduce(tensor, average=False))
+                    for tensor in tensors
+                ]
+                # cast expected result to the type of the tensorflow values
+                np_type = dtype.as_numpy_dtype
+                tmp = [t.astype(np_type) for t in expected]
+                self.assertAllClose(tmp, reduced_tensors)
 
     def test_horovod_multiple_large_tensors_allreduce_cpu(self):
         """Test on CPU that the allreduce correctly sums 1D, 2D, 3D tensors."""
