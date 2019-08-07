@@ -51,11 +51,11 @@ public:
 protected:
   // TODO fix this API
   template<typename T>
-  void MsAllreduce_Internal(T* gradient_buffer, T* result_buffer, int buffer_length, MPI_Comm* node_comm, int message_tag);
+  void MsAllreduce_Internal(T* gradient_buffer, T* result_buffer, int buffer_length, MPI_Comm* node_comm, int message_tag, DataType datatype);
   
   // TODO new parasail begin  
   template <typename T>
-  void SyncLocalReduce(T *grad_buffer, T *recv_buffer, int count, MPI_Comm communicator, int message_tag);
+  void SyncLocalReduce(T *grad_buffer, T *recv_buffer, int count, MPI_Comm communicator, int message_tag, DataType datatype);
   
   template <typename T>
   void SyncLocalBroadcast(T *grad_buffer, T *recv_buffer, int count, MPI_Comm communicator, int message_tag);

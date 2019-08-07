@@ -103,7 +103,7 @@ void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorT
                     (int8_t*) recv_buffer,
                     buffer_len,
                     node_comm,
-                    layerid);  
+                    layerid, HOROVOD_INT8);  
     break;     
     case HOROVOD_UINT8:
     //TODO new parasail
@@ -111,7 +111,7 @@ void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorT
                     (uint8_t*) recv_buffer,
                     buffer_len,
                     node_comm,
-                    layerid);  
+                    layerid, HOROVOD_UINT8);  
     break;
     case HOROVOD_FLOAT16:
     //TODO new parasail
@@ -119,7 +119,7 @@ void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorT
                     (MsAllreduceOp::float16*) recv_buffer,
                     buffer_len,
                     node_comm,
-                    layerid);  
+                    layerid, HOROVOD_FLOAT16);  
 
     case HOROVOD_UINT16:
     //TODO new parasail
@@ -127,7 +127,7 @@ void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorT
                     (uint16_t*) recv_buffer,
                     buffer_len,
                     node_comm,
-                    layerid);  
+                    layerid, HOROVOD_UINT16);  
     break;
     case HOROVOD_INT16:
     //TODO new parasail
@@ -135,7 +135,7 @@ void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorT
                     (int16_t*) recv_buffer,
                     buffer_len,
                     node_comm,
-                    layerid);  
+                    layerid, HOROVOD_INT16);  
     break;
     case HOROVOD_INT32:
     //TODO new parasail
@@ -143,7 +143,7 @@ void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorT
                     (int32_t*) recv_buffer,
                     buffer_len,
                     node_comm,
-                    layerid);  
+                    layerid, HOROVOD_INT32);  
     break;
     case HOROVOD_INT64:
     //TODO new parasail
@@ -151,7 +151,7 @@ void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorT
                     (int64_t*) recv_buffer,
                     buffer_len,
                     node_comm,
-                    layerid);
+                    layerid,HOROVOD_INT64);
     break;
     case HOROVOD_FLOAT32:
     //TODO new parasail
@@ -159,7 +159,8 @@ void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorT
                     (float*) recv_buffer,
                     buffer_len,
                     node_comm,
-                    layerid);
+                    layerid,
+                    HOROVOD_FLOAT32);
     break;
     case HOROVOD_FLOAT64:
     //TODO new parasail
@@ -167,7 +168,8 @@ void MsAllreduceOp::Execute_helper(std::map<int, Status>& return_status, TensorT
                     (double*) recv_buffer,
                     buffer_len,
                     node_comm,
-                    layerid);
+                    layerid,
+                    HOROVOD_FLOAT64);
     
     break;
     default:
@@ -193,11 +195,11 @@ bool MsAllreduceOp::Enabled(const ParameterManager& param_manager,
 
 // TODO new parasail algo begin
 template<typename T>
-void MsAllreduceOp::MsAllreduce_Internal(T* grad_buffer, T* recv_buffer, int buffer_length, MPI_Comm* node_comm, int message_tag) {
+void MsAllreduceOp::MsAllreduce_Internal(T* grad_buffer, T* recv_buffer, int buffer_length, MPI_Comm* node_comm, int message_tag, DataType datatype) {
   int count = buffer_length / sizeof(T);
   int local_rank = 0;
   MPI_Comm_rank(global_state_->local_comm, &local_rank);
-  SyncLocalReduce(grad_buffer, recv_buffer, count, global_state_->local_comm, message_tag);
+  SyncLocalReduce(grad_buffer, recv_buffer, count, global_state_->local_comm, message_tag, datatype);
   if (local_rank == 0 && node_comm != NULL) {
     SyncAllreduce(grad_buffer, recv_buffer, count, *node_comm, global_state_->reduction_comms, message_tag);
   }
@@ -231,11 +233,8 @@ void MsAllreduceOp::PairwiseReduceWithComm(T* a, T* b, int count, int message_ta
     double anormsq = 0.f;
     double bnormsq = 0.f;
     ComputeDotAndNormSqrds(a, b, count, dotProduct, anormsq, bnormsq);
-    //TODO DEBUG
-    LOG(INFO, global_state_->rank)<<"dot product: "<<dotProduct;
 
     double reduce_vals[3];
-    double recv_reduce_vals[3];
     if (isLeftNeighbor) { 
         reduce_vals[0] = anormsq;
         reduce_vals[1] = bnormsq;
@@ -287,8 +286,12 @@ void MsAllreduceOp::SyncLocalBroadcast(T *grad_buffer, T *recv_buffer, int count
 }
 
 template <typename T>
-void MsAllreduceOp::SyncLocalReduce(T *grad_buffer, T *recv_buffer, int count, MPI_Comm communicator, int message_tag)
+void MsAllreduceOp::SyncLocalReduce(T *grad_buffer, T *recv_buffer, int count, MPI_Comm communicator, int message_tag, DataType datatype)
 {
+    //TODO replace this
+    MPI_Allreduce(MPI_IN_PLACE, grad_buffer, count, mpi_context_->GetMPIDataType(datatype), MPI_SUM, communicator);
+
+    return;
     int rank;
     int size;
     MPI_Comm_rank(communicator, &rank);
@@ -372,8 +375,6 @@ void MsAllreduceOp::SyncAllreduce(T* grad_buffer, T* recv_buffer, int count, MPI
     int orgSize = size;
     size = nearest_power_2;
     if (rank < nearest_power_2){
-        T* org_grad_buffer = grad_buffer;
-        T* org_recv_buffer = recv_buffer;
         int myCount = count;
         int comm_index;
         for (level = 1, comm_index = 0; level < size; level = (level << 1), comm_index++){
