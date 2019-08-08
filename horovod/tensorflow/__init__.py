@@ -81,7 +81,9 @@ def allreduce(tensor, average=True, device_dense='', device_sparse='',
             #TODO fix this
             msallreduce_enable = os.environ['HOROVOD_MSALLREDUCE_ENABLE']
             use_msallreduce = True if msallreduce_enable is not None and msallreduce_enable == '1' else False
-            num_threads = os.environ['HOROVOD_NUMBER_OF_MPI_THREADS']
+            num_threads = 0
+            if 'HOROVOD_NUMBER_OF_MPI_THREADS' in os.environ:
+                num_threads = os.environ['HOROVOD_NUMBER_OF_MPI_THREADS']
             has_threads = True if num_threads is not None and  int(num_threads) >=1 else False
             new_tensor = (tf.div(summed_tensor, horovod_size)
                           if average and (not use_msallreduce or not has_threads) else summed_tensor)

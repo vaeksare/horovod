@@ -61,6 +61,9 @@ struct HorovodGlobalState {
   
   //flag to indicate usage of multiple threads
   bool multithread_enabled = false;
+
+  //flag to indicate usage of ms allreduce algorithm
+  bool msallreduce_enabled = false;
   
   // Counter used to keep track of how many of the parallel reductions finished
   // TODO do we need this?
@@ -74,7 +77,11 @@ struct HorovodGlobalState {
   
   HorovodGlobalState() {
     auto horovod_number_of_threads = std::getenv(HOROVOD_NUMBER_OF_MPI_THREADS);
-      
+    auto msallreduce = std::getenv(HOROVOD_MSALLREDUCE_ENABLE);
+    if (msallreduce != nullptr && state.multithread_enabled){
+      int msallreduce_value = std::strtol(msallreduce, nullptr, 10);
+      msallreduce_enabled = msallreduce_value == 1;
+    }
     if (horovod_number_of_threads != nullptr){
       int num_threads = std::strtol(horovod_number_of_threads, nullptr, 10);
       LOG(INFO)<<"HOROVOD_NUMBER_OF_MPI_THREADS is set to "<<num_threads;
