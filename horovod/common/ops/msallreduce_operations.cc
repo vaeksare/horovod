@@ -231,11 +231,8 @@ void MsAllreduceOp::PairwiseReduceWithComm(T* a, T* b, int count, int message_ta
     double anormsq = 0.f;
     double bnormsq = 0.f;
     ComputeDotAndNormSqrds(a, b, count, dotProduct, anormsq, bnormsq);
-    //TODO DEBUG
-    LOG(INFO, global_state_->rank)<<"dot product: "<<dotProduct;
 
     double reduce_vals[3];
-    double recv_reduce_vals[3];
     if (isLeftNeighbor) { 
         reduce_vals[0] = anormsq;
         reduce_vals[1] = bnormsq;
@@ -372,8 +369,6 @@ void MsAllreduceOp::SyncAllreduce(T* grad_buffer, T* recv_buffer, int count, MPI
     int orgSize = size;
     size = nearest_power_2;
     if (rank < nearest_power_2){
-        T* org_grad_buffer = grad_buffer;
-        T* org_recv_buffer = recv_buffer;
         int myCount = count;
         int comm_index;
         for (level = 1, comm_index = 0; level < size; level = (level << 1), comm_index++){

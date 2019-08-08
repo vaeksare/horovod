@@ -79,7 +79,9 @@ def allreduce(tensor, average=True, device_dense='', device_sparse='',
             summed_tensor_compressed = _allreduce(tensor_compressed)
             summed_tensor = compression.decompress(summed_tensor_compressed, ctx)
             #TODO fix this
-            msallreduce_enable = os.environ['HOROVOD_MSALLREDUCE_ENABLE']
+            msallreduce_enable = False
+            if 'HOROVOD_MSALLREDUCE_ENABLE' in os.environ:
+                msallreduce_enable = os.environ['HOROVOD_MSALLREDUCE_ENABLE']
             use_msallreduce = True if msallreduce_enable is not None and msallreduce_enable == '1' else False
             num_threads = 0
             if 'HOROVOD_NUMBER_OF_MPI_THREADS' in os.environ:

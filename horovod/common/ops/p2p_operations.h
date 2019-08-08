@@ -44,10 +44,10 @@ protected:
   MPIContext* mpi_context_;
   template<class T>
   void PointToPointSend(T* input_data_buffer,
-                                      int64_t buffer_length,
-                                      int dest_rank,
-                                      int tag,
-                                      Communicator communicator) {
+                        int64_t buffer_length,
+                        int dest_rank,
+                        int tag,
+                        Communicator communicator) {
     int status;                       
     if (!global_state_->msg_chunk_enabled) {
         LOG(INFO, global_state_->rank)<<std::this_thread::get_id()<<" begin p2p send for tag: "<<tag;
@@ -80,10 +80,10 @@ protected:
 
   template<class T>
   void PointToPointRecv(T* output_data_buffer,
-                                      int64_t buffer_length,
-                                      int src_rank,
-                                      int tag,
-                                      Communicator communicator) {
+                        int64_t buffer_length,
+                        int src_rank,
+                        int tag,
+                        Communicator communicator) {
     int status;
     if (!global_state_->msg_chunk_enabled) {
         LOG(INFO, global_state_->rank)<<std::this_thread::get_id()<<" begin p2p recv for tag: "<<tag;

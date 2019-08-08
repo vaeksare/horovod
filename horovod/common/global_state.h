@@ -59,9 +59,6 @@ struct HorovodGlobalState {
   // Thread pool
   boost::asio::thread_pool* background_thread_pool;
   
-  //flag to indicate usage of multiple threads
-  bool multithread_enabled = false;
-
   //flag to indicate usage of ms allreduce algorithm
   bool msallreduce_enabled = false;
   
@@ -78,32 +75,33 @@ struct HorovodGlobalState {
   HorovodGlobalState() {
     auto horovod_number_of_threads = std::getenv(HOROVOD_NUMBER_OF_MPI_THREADS);
     auto msallreduce = std::getenv(HOROVOD_MSALLREDUCE_ENABLE);
-    if (msallreduce != nullptr && state.multithread_enabled){
+    if (msallreduce != nullptr) {
       int msallreduce_value = std::strtol(msallreduce, nullptr, 10);
       msallreduce_enabled = msallreduce_value == 1;
     }
-    if (horovod_number_of_threads != nullptr){
-      int num_threads = std::strtol(horovod_number_of_threads, nullptr, 10);
-      LOG(INFO)<<"HOROVOD_NUMBER_OF_MPI_THREADS is set to "<<num_threads;
-      if (num_threads < 0){
-        throw std::logic_error("Number of threads must be greater or equal to 0.");
-      }
-      else if (num_threads == 0) {
-        LOG(INFO)<<"Starting Horovod in main thread only.";
+    if (msallreduce_enabled == true) {
+      int num_threads;
+      if (horovod_number_of_threads != nullptr){
+        num_threads = std::strtol(horovod_number_of_threads, nullptr, 10);
+        LOG(INFO)<<"HOROVOD_NUMBER_OF_MPI_THREADS is set to "<<num_threads;
+        if (num_threads <= 0){
+          throw std::logic_error("Number of threads must be greater or equal to 1 when msallreduce is used.");
+        }
       }
       else {
-        //Making this static so that this pool is preverved throughout the lifetime of the program
-        LOG(INFO)<<"Starting "<<num_threads<<" MPI threads for threadpool.";
-        static boost::asio::thread_pool pool(num_threads);
-        // Create a buffer manager for temp buffers for each thread
-        for (int i = 0; i < num_threads; ++i) {
-          temp_buffers.emplace();
-        }
-        background_thread_pool = &pool;
-        multithread_enabled = true;
+        LOG(INFO)<<"HOROVOD_NUMBER_OF_MPI_THREADS is not set. Creating threadpool with 1 thread by default. ";
+        num_threads = 1;
       }
+      //Making this static so that this pool is preverved throughout the lifetime of the program
+      LOG(INFO)<<"Starting "<<num_threads<<" MPI threads for threadpool.";
+      static boost::asio::thread_pool pool(num_threads);
+      // Create a buffer manager for temp buffers for each thread
+      for (int i = 0; i < num_threads; ++i) {
+        temp_buffers.emplace();
+      }
+      background_thread_pool = &pool;
+      finished_parallel_reductions = 0;
     }
-    finished_parallel_reductions = 0;
   }
   
   // Background thread running MPI communication.

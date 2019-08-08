@@ -150,9 +150,7 @@ OperationManager* CreateOperationManager(HorovodGlobalState& state) {
   std::vector<std::shared_ptr<AllreduceOp>> allreduce_ops;
   std::vector<std::shared_ptr<AllgatherOp>> allgather_ops;
   std::vector<std::shared_ptr<BroadcastOp>> broadcast_ops;
-  auto msallreduce = std::getenv(HOROVOD_MSALLREDUCE_ENABLE);
-  LOG(INFO) << "Multithread: "<<state.multithread_enabled;
-  if (msallreduce != nullptr && state.multithread_enabled){
+  if (state.msallreduce_enabled == true){
     LOG(INFO) << "msallreduce enabled.";
     allreduce_ops.push_back(std::shared_ptr<AllreduceOp>(new MsAllreduceOp(&mpi_context, &state)));
   }
@@ -516,7 +514,7 @@ ResponseList FuseResponses(std::deque<Response>& responses,
     // Protect access to tensor table.
     std::lock_guard<std::mutex> guard(horovod_global.mutex);
     //TODO consider to blend this logic into regular response fusion
-    if(state.multithread_enabled == true){
+    if(state.msallreduce_enabled == true){
       auto queue_size = responses.size();
       // we will merge all tensor names into the first response.
       Response first_response;
@@ -1015,7 +1013,7 @@ void BackgroundThreadLoop(HorovodGlobalState& state, MPIContext& ctx) {
 
   // parasail new algo begin
   // TODO make this a condition and merge with horovod's hiearchical allreduce
-  if(state.multithread_enabled == true) {
+  if(state.msallreduce_enabled == true) {
     MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &state.local_comm);
     int ms_local_rank, ms_local_size;
     MPI_Comm_size(state.local_comm, &ms_local_size);
