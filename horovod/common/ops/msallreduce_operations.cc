@@ -195,14 +195,13 @@ bool MsAllreduceOp::Enabled(const ParameterManager& param_manager,
 template<typename T>
 void MsAllreduceOp::MsAllreduce_Internal(T* grad_buffer, T* recv_buffer, int buffer_length, MPI_Comm* node_comm, int message_tag) {
   int count = buffer_length / sizeof(T);
-  int local_rank = 0;
-  MPI_Comm_rank(global_state_->local_comm, &local_rank);
-  SyncLocalReduce(grad_buffer, recv_buffer, count, global_state_->local_comm, message_tag);
-  if (local_rank == 0 && node_comm != NULL) {
-    SyncAllreduce(grad_buffer, recv_buffer, count, *node_comm, global_state_->reduction_comms, message_tag);
-  }
-  SyncLocalBroadcast(grad_buffer, recv_buffer, count, global_state_->local_comm, message_tag);
-  
+  //int local_rank = 0;
+  //MPI_Comm_rank(global_state_->local_comm, &local_rank);
+  //SyncLocalReduce(grad_buffer, recv_buffer, count, global_state_->local_comm, message_tag);
+  //if (local_rank == 0 && node_comm != NULL) {
+  SyncAllreduce(grad_buffer, recv_buffer, count, *node_comm, global_state_->reduction_comms, message_tag);
+  //}
+  //SyncLocalBroadcast(grad_buffer, recv_buffer, count, global_state_->local_comm, message_tag);
 }
 
 template<typename T>
@@ -320,6 +319,11 @@ void MsAllreduceOp::SyncLocalReduce(T *grad_buffer, T *recv_buffer, int count, M
     delete[] reqs;
 }
 
+static bool IsPowerOfTwo(ulong x)
+{
+  return (x != 0) && ((x & (x - 1)) == 0);
+}
+  
 template<typename T>
 void MsAllreduceOp::SyncAllreduce(T* grad_buffer, T* recv_buffer, int count, MPI_Comm communicator, MPI_Comm* reduction_comms, int message_tag) {
     int rank;
@@ -327,9 +331,14 @@ void MsAllreduceOp::SyncAllreduce(T* grad_buffer, T* recv_buffer, int count, MPI
     MPI_Comm_rank(communicator, &rank);
     MPI_Comm_size(communicator, &size);
     //MPI_Allreduce((float*) grad_buffer, (float*) recv_buffer, count/2, MPI_FLOAT, MPI_SUM, communicator);
-    //return;
 
-    int chunk_size = (1<<15);
+    //return;
+    if (IsPowerOfTwo(size) == false) {
+      throw std::logic_error("BUGBUG: need to implement logic for non power of two ranks");
+    }
+    
+    //int chunk_size = (1<<15);
+    int chunk_size = (1<<29);
     int nearest_power_2 = 1;
     for (nearest_power_2 = 1; (nearest_power_2<<1) <= size; nearest_power_2 = (nearest_power_2 << 1)){}
     int remaining_non_power_2 = size - nearest_power_2;
