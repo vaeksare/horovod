@@ -43,7 +43,7 @@ Status MsAllreduceOp::Execute(std::vector<TensorTableEntry>& entries, const Resp
     });
     layerid++;
   }
-  while (global_state_->finished_parallel_reductions < num_reductions) {
+  while (global_state_->finished_parallel_reductions.load() < num_reductions) {
     std::this_thread::sleep_for(std::chrono::nanoseconds(50));
   }
   global_state_->finished_parallel_reductions = 0;
@@ -290,6 +290,9 @@ void MsAllreduceOp::SyncLocalReduce(T *grad_buffer, T *recv_buffer, int count, M
     int size;
     MPI_Comm_rank(communicator, &rank);
     MPI_Comm_size(communicator, &size);
+    if (count % size != 0) {
+      throw std::logic_error("BUGBUG: requires # of tensor elements be divisible by hvd.size()");
+    }
     MPI_Request* reqs = new MPI_Request[(size-1)*2];
     int num_reqs = 0;
     for (int i = 0; i < size; i++){
