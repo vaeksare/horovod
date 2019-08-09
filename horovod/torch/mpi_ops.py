@@ -77,11 +77,7 @@ def _allreduce_async(tensor, output, average, name):
     if 'HOROVOD_MSALLREDUCE_ENABLE' in os.environ:
         msallreduce_enable = os.environ['HOROVOD_MSALLREDUCE_ENABLE']
     use_msallreduce = True if msallreduce_enable is not None and msallreduce_enable == '1' else False
-    num_threads = 0
-    if 'HOROVOD_NUMBER_OF_MPI_THREADS' in os.environ:
-        num_threads = os.environ['HOROVOD_NUMBER_OF_MPI_THREADS']
-    has_threads = True if num_threads is not None and  int(num_threads) >=1 else False
-    if use_msallreduce or has_threads:
+    if use_msallreduce:
         average = False
     if tensor.dtype == torch.float16 and not _fp16_supported:
         raise NotImplementedError(

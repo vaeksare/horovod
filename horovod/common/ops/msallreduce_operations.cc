@@ -410,7 +410,6 @@ void MsAllreduceOp::SyncAllreduce(T* grad_buffer, T* recv_buffer, int count, MPI
             if (level == 1) {
                 ScaledAdd(myCount, 0.5, grad_buffer , 0.5, recv_buffer);
             } else {
-                LOG(INFO,global_state_->rank)<<"comm_index is"<<comm_index;
                 PairwiseReduceWithComm(grad_buffer, recv_buffer, myCount, message_tag, reduction_comms[comm_index], (rank & level) == 0);
             }
         }
